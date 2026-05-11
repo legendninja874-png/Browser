@@ -1,22 +1,37 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 1.0.0
+  description: EoN Browser backend API — tabs, workspaces, bookmarks, history, AI intelligence, sync, and security systems
 servers:
   - url: /api
-    description: Base API path
+    description: EoN Browser API Gateway
 tags:
   - name: health
     description: Health operations
+  - name: tabs
+    description: Tab management and session control
+  - name: workspaces
+    description: Workspace management
+  - name: bookmarks
+    description: Bookmark collections
+  - name: history
+    description: Browsing history
+  - name: intelligence
+    description: EoN Intelligence AI system
+  - name: sync
+    description: Cloud synchronization
+  - name: downloads
+    description: Download manager
+  - name: dashboard
+    description: Browser dashboard and analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +39,495 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── TABS ──────────────────────────────────────────────────────────────────
+  /tabs:
+    get:
+      operationId: listTabs
+      tags: [tabs]
+      summary: List all open tabs
+      responses:
+        "200":
+          description: List of tabs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tab"
+    post:
+      operationId: createTab
+      tags: [tabs]
+      summary: Open a new tab
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TabInput"
+      responses:
+        "201":
+          description: Tab created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tab"
+
+  /tabs/{id}:
+    get:
+      operationId: getTab
+      tags: [tabs]
+      summary: Get a tab by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tab found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tab"
+    patch:
+      operationId: updateTab
+      tags: [tabs]
+      summary: Update tab properties
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TabUpdate"
+      responses:
+        "200":
+          description: Tab updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tab"
+    delete:
+      operationId: closeTab
+      tags: [tabs]
+      summary: Close a tab
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Tab closed
+
+  /tabs/stats:
+    get:
+      operationId: getTabStats
+      tags: [tabs]
+      summary: Tab statistics — total, sleeping, grouped, memory usage
+      responses:
+        "200":
+          description: Tab statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TabStats"
+
+  # ── WORKSPACES ────────────────────────────────────────────────────────────
+  /workspaces:
+    get:
+      operationId: listWorkspaces
+      tags: [workspaces]
+      summary: List all workspaces
+      responses:
+        "200":
+          description: List of workspaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Workspace"
+    post:
+      operationId: createWorkspace
+      tags: [workspaces]
+      summary: Create a new workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceInput"
+      responses:
+        "201":
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+
+  /workspaces/{id}:
+    get:
+      operationId: getWorkspace
+      tags: [workspaces]
+      summary: Get a workspace by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+    patch:
+      operationId: updateWorkspace
+      tags: [workspaces]
+      summary: Update workspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceUpdate"
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+    delete:
+      operationId: deleteWorkspace
+      tags: [workspaces]
+      summary: Delete a workspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── BOOKMARKS ─────────────────────────────────────────────────────────────
+  /bookmarks:
+    get:
+      operationId: listBookmarks
+      tags: [bookmarks]
+      summary: List all bookmarks
+      responses:
+        "200":
+          description: Bookmarks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bookmark"
+    post:
+      operationId: createBookmark
+      tags: [bookmarks]
+      summary: Add a bookmark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookmarkInput"
+      responses:
+        "201":
+          description: Bookmark created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bookmark"
+
+  /bookmarks/{id}:
+    delete:
+      operationId: deleteBookmark
+      tags: [bookmarks]
+      summary: Remove a bookmark
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Removed
+
+  /bookmarks/recent:
+    get:
+      operationId: getRecentBookmarks
+      tags: [bookmarks]
+      summary: Most recently added bookmarks (top 10)
+      responses:
+        "200":
+          description: Recent bookmarks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bookmark"
+
+  # ── HISTORY ───────────────────────────────────────────────────────────────
+  /history:
+    get:
+      operationId: listHistory
+      tags: [history]
+      summary: Get browsing history
+      responses:
+        "200":
+          description: History entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryEntry"
+    post:
+      operationId: addHistoryEntry
+      tags: [history]
+      summary: Record a history entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HistoryInput"
+      responses:
+        "201":
+          description: History recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryEntry"
+    delete:
+      operationId: clearHistory
+      tags: [history]
+      summary: Clear all browsing history
+      responses:
+        "204":
+          description: History cleared
+
+  /history/recent:
+    get:
+      operationId: getRecentHistory
+      tags: [history]
+      summary: Most recently visited sites (top 20)
+      responses:
+        "200":
+          description: Recent history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryEntry"
+
+  /history/top-sites:
+    get:
+      operationId: getTopSites
+      tags: [history]
+      summary: Most visited sites with visit counts
+      responses:
+        "200":
+          description: Top sites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopSite"
+
+  # ── EoN INTELLIGENCE ──────────────────────────────────────────────────────
+  /intelligence/chat:
+    post:
+      operationId: sendAiMessage
+      tags: [intelligence]
+      summary: Send a message to EoN Intelligence AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiMessageInput"
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiMessage"
+
+  /intelligence/conversations:
+    get:
+      operationId: listConversations
+      tags: [intelligence]
+      summary: List AI conversation threads
+      responses:
+        "200":
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+
+  /intelligence/conversations/{id}/messages:
+    get:
+      operationId: getConversationMessages
+      tags: [intelligence]
+      summary: Get messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiMessage"
+
+  /intelligence/suggestions:
+    get:
+      operationId: getSmartSuggestions
+      tags: [intelligence]
+      summary: AI-powered smart browsing suggestions based on history
+      responses:
+        "200":
+          description: Smart suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SmartSuggestion"
+
+  # ── DOWNLOADS ─────────────────────────────────────────────────────────────
+  /downloads:
+    get:
+      operationId: listDownloads
+      tags: [downloads]
+      summary: List all downloads
+      responses:
+        "200":
+          description: Downloads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Download"
+    post:
+      operationId: startDownload
+      tags: [downloads]
+      summary: Start a new download
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DownloadInput"
+      responses:
+        "201":
+          description: Download started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Download"
+
+  # ── DASHBOARD ─────────────────────────────────────────────────────────────
+  /dashboard/overview:
+    get:
+      operationId: getDashboardOverview
+      tags: [dashboard]
+      summary: Browser dashboard — tab count, blocked trackers, memory, data saved, AI uses
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardOverview"
+
+  /dashboard/activity:
+    get:
+      operationId: getActivityFeed
+      tags: [dashboard]
+      summary: Recent browser activity feed
+      responses:
+        "200":
+          description: Activity feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  # ── SYNC ──────────────────────────────────────────────────────────────────
+  /sync/status:
+    get:
+      operationId: getSyncStatus
+      tags: [sync]
+      summary: Cloud sync status across devices
+      responses:
+        "200":
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+
+  /sync/push:
+    post:
+      operationId: pushSync
+      tags: [sync]
+      summary: Push local state to cloud sync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncPushInput"
+      responses:
+        "200":
+          description: Sync complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +535,244 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    # ── TABS ─────────────────────────────────────────────────────────────────
+    Tab:
+      type: object
+      required: [id, title, url, workspaceId, isActive, isSleeping, isPinned, isIncognito, createdAt]
+      properties:
+        id:          { type: integer }
+        title:       { type: string }
+        url:         { type: string }
+        favicon:     { type: ["string", "null"] }
+        workspaceId: { type: ["integer", "null"] }
+        groupId:     { type: ["integer", "null"] }
+        groupName:   { type: ["string", "null"] }
+        groupColor:  { type: ["string", "null"] }
+        isActive:    { type: boolean }
+        isSleeping:  { type: boolean }
+        isPinned:    { type: boolean }
+        isIncognito: { type: boolean }
+        memoryMb:    { type: ["number", "null"] }
+        createdAt:   { type: string }
+
+    TabInput:
+      type: object
+      required: [url]
+      properties:
+        url:         { type: string }
+        title:       { type: string }
+        workspaceId: { type: ["integer", "null"] }
+        isIncognito: { type: boolean }
+        isPinned:    { type: boolean }
+
+    TabUpdate:
+      type: object
+      properties:
+        title:       { type: string }
+        url:         { type: string }
+        isActive:    { type: boolean }
+        isSleeping:  { type: boolean }
+        isPinned:    { type: boolean }
+        groupId:     { type: ["integer", "null"] }
+        workspaceId: { type: ["integer", "null"] }
+
+    TabStats:
+      type: object
+      required: [total, sleeping, pinned, incognito, grouped, totalMemoryMb]
+      properties:
+        total:         { type: integer }
+        sleeping:      { type: integer }
+        pinned:        { type: integer }
+        incognito:     { type: integer }
+        grouped:       { type: integer }
+        totalMemoryMb: { type: number }
+
+    # ── WORKSPACES ───────────────────────────────────────────────────────────
+    Workspace:
+      type: object
+      required: [id, name, icon, color, isActive, tabCount, createdAt]
+      properties:
+        id:        { type: integer }
+        name:      { type: string }
+        icon:      { type: string }
+        color:     { type: string }
+        isActive:  { type: boolean }
+        tabCount:  { type: integer }
+        createdAt: { type: string }
+
+    WorkspaceInput:
+      type: object
+      required: [name, icon, color]
+      properties:
+        name:  { type: string }
+        icon:  { type: string }
+        color: { type: string }
+
+    WorkspaceUpdate:
+      type: object
+      properties:
+        name:     { type: string }
+        icon:     { type: string }
+        color:    { type: string }
+        isActive: { type: boolean }
+
+    # ── BOOKMARKS ────────────────────────────────────────────────────────────
+    Bookmark:
+      type: object
+      required: [id, title, url, createdAt]
+      properties:
+        id:          { type: integer }
+        title:       { type: string }
+        url:         { type: string }
+        favicon:     { type: ["string", "null"] }
+        folder:      { type: ["string", "null"] }
+        workspaceId: { type: ["integer", "null"] }
+        createdAt:   { type: string }
+
+    BookmarkInput:
+      type: object
+      required: [title, url]
+      properties:
+        title:       { type: string }
+        url:         { type: string }
+        favicon:     { type: ["string", "null"] }
+        folder:      { type: ["string", "null"] }
+        workspaceId: { type: ["integer", "null"] }
+
+    # ── HISTORY ──────────────────────────────────────────────────────────────
+    HistoryEntry:
+      type: object
+      required: [id, title, url, visitedAt]
+      properties:
+        id:          { type: integer }
+        title:       { type: string }
+        url:         { type: string }
+        favicon:     { type: ["string", "null"] }
+        visitCount:  { type: integer }
+        visitedAt:   { type: string }
+
+    HistoryInput:
+      type: object
+      required: [title, url]
+      properties:
+        title:   { type: string }
+        url:     { type: string }
+        favicon: { type: ["string", "null"] }
+
+    TopSite:
+      type: object
+      required: [url, title, visitCount, favicon]
+      properties:
+        url:        { type: string }
+        title:      { type: string }
+        visitCount: { type: integer }
+        favicon:    { type: ["string", "null"] }
+
+    # ── EoN INTELLIGENCE ─────────────────────────────────────────────────────
+    AiMessage:
+      type: object
+      required: [id, conversationId, role, content, createdAt]
+      properties:
+        id:             { type: integer }
+        conversationId: { type: integer }
+        role:           { type: string }
+        content:        { type: string }
+        model:          { type: ["string", "null"] }
+        createdAt:      { type: string }
+
+    AiMessageInput:
+      type: object
+      required: [content]
+      properties:
+        content:        { type: string }
+        conversationId: { type: ["integer", "null"] }
+        context:        { type: ["string", "null"] }
+
+    Conversation:
+      type: object
+      required: [id, title, messageCount, createdAt, updatedAt]
+      properties:
+        id:           { type: integer }
+        title:        { type: string }
+        messageCount: { type: integer }
+        createdAt:    { type: string }
+        updatedAt:    { type: string }
+
+    SmartSuggestion:
+      type: object
+      required: [id, type, title, url, reason]
+      properties:
+        id:     { type: integer }
+        type:   { type: string }
+        title:  { type: string }
+        url:    { type: string }
+        reason: { type: string }
+        favicon: { type: ["string", "null"] }
+
+    # ── DOWNLOADS ────────────────────────────────────────────────────────────
+    Download:
+      type: object
+      required: [id, filename, url, status, sizeBytes, downloadedBytes, createdAt]
+      properties:
+        id:             { type: integer }
+        filename:       { type: string }
+        url:            { type: string }
+        status:         { type: string }
+        sizeBytes:      { type: ["number", "null"] }
+        downloadedBytes: { type: number }
+        createdAt:      { type: string }
+
+    DownloadInput:
+      type: object
+      required: [url, filename]
+      properties:
+        url:      { type: string }
+        filename: { type: string }
+
+    # ── DASHBOARD ────────────────────────────────────────────────────────────
+    DashboardOverview:
+      type: object
+      required: [totalTabs, sleepingTabs, trackersBlocked, memoryUsedMb, dataSavedMb, aiUsesToday, workspaceCount, bookmarkCount, historyCount]
+      properties:
+        totalTabs:       { type: integer }
+        sleepingTabs:    { type: integer }
+        trackersBlocked: { type: integer }
+        memoryUsedMb:    { type: number }
+        dataSavedMb:     { type: number }
+        aiUsesToday:     { type: integer }
+        workspaceCount:  { type: integer }
+        bookmarkCount:   { type: integer }
+        historyCount:    { type: integer }
+
+    ActivityItem:
+      type: object
+      required: [id, type, title, description, timestamp]
+      properties:
+        id:          { type: integer }
+        type:        { type: string }
+        title:       { type: string }
+        description: { type: string }
+        url:         { type: ["string", "null"] }
+        timestamp:   { type: string }
+
+    # ── SYNC ─────────────────────────────────────────────────────────────────
+    SyncStatus:
+      type: object
+      required: [lastSyncAt, deviceCount, tabsSynced, bookmarksSynced, historySynced, settingsSynced]
+      properties:
+        lastSyncAt:       { type: ["string", "null"] }
+        deviceCount:      { type: integer }
+        tabsSynced:       { type: boolean }
+        bookmarksSynced:  { type: boolean }
+        historySynced:    { type: boolean }
+        settingsSynced:   { type: boolean }
+
+    SyncPushInput:
+      type: object
+      properties:
+        includeTabs:      { type: boolean }
+        includeBookmarks: { type: boolean }
+        includeHistory:   { type: boolean }
+        includeSettings:  { type: boolean }
