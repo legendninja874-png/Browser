@@ -1,171 +1,175 @@
+import { useState, useEffect } from "react";
 import { useGetTopSites, useGetRecentHistory, useGetSmartSuggestions } from "@workspace/api-client-react";
-import { motion } from "framer-motion";
-import { Search, Sparkles, Clock, Globe } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Search, Sparkles, Globe, Clock, ArrowUpRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function Home() {
-  const { data: topSites, isLoading: loadingTopSites } = useGetTopSites();
-  const { data: recentHistory, isLoading: loadingHistory } = useGetRecentHistory();
-  const { data: suggestions, isLoading: loadingSuggestions } = useGetSmartSuggestions();
+function useClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
 
-  const now = new Date();
-  const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const dateString = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+function getFavicon(url: string) {
+  try {
+    const host = new URL(url).hostname;
+    return `https://www.google.com/s2/favicons?domain=${host}&sz=32`;
+  } catch {
+    return null;
+  }
+}
+
+function relativeTime(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+export default function Home() {
+  const { data: topSites,    isLoading: loadingTop }  = useGetTopSites();
+  const { data: recentHistory, isLoading: loadingHist } = useGetRecentHistory();
+  const { data: suggestions, isLoading: loadingSugg }  = useGetSmartSuggestions();
+  const now = useClock();
+
+  const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const dateStr = now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 
   return (
-    <div className="min-h-full w-full p-8 relative overflow-hidden flex flex-col items-center pt-24 pb-12">
-      {/* Background elements */}
-      <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,_var(--tw-gradient-stops))] from-primary/10 via-background to-background" />
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-secondary/20 rounded-full blur-[128px] z-0 pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/20 rounded-full blur-[128px] z-0 pointer-events-none" />
+    <div className="h-full overflow-y-auto bg-[#0d0e12]">
+      <div className="max-w-[680px] mx-auto px-6 pt-16 pb-10 flex flex-col gap-10">
 
-      <div className="w-full max-w-5xl z-10 flex flex-col gap-12">
-        {/* Time and Search */}
-        <div className="flex flex-col items-center gap-6">
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center"
-          >
-            <h2 className="text-5xl font-light tracking-tight text-white mb-2">{timeString}</h2>
-            <p className="text-muted-foreground tracking-widest uppercase text-sm">{dateString}</p>
-          </motion.div>
+        {/* Clock + Search */}
+        <div className="flex flex-col items-center gap-5">
+          <div className="text-center">
+            <div className="text-4xl font-light tracking-tight text-white tabular-nums">{timeStr}</div>
+            <div className="text-[11px] text-white/30 uppercase tracking-widest mt-1">{dateStr}</div>
+          </div>
 
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
-            className="w-full max-w-2xl relative group"
-          >
-            <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-            <div className="relative flex items-center glass-panel rounded-full p-2 pr-4 border border-primary/30 neon-box">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary flex-shrink-0 ml-1">
-                <Search className="w-5 h-5" />
-              </div>
-              <Input 
-                placeholder="Search the web or ask EoN AI..." 
-                className="border-0 bg-transparent focus-visible:ring-0 text-lg placeholder:text-muted-foreground/70 h-12 flex-1"
-                data-testid="home-search-input"
-              />
-              <Sparkles className="w-5 h-5 text-secondary animate-pulse ml-2 flex-shrink-0" />
-            </div>
-          </motion.div>
+          <div className="w-full flex items-center gap-2 h-9 bg-white/5 border border-white/10 rounded-lg px-3 hover:bg-white/7 hover:border-white/15 focus-within:border-primary/30 focus-within:bg-white/7 transition-colors">
+            <Search className="w-3.5 h-3.5 text-white/30 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search the web or ask EoN AI..."
+              className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder:text-white/25"
+              data-testid="home-search-input"
+            />
+            <Sparkles className="w-3.5 h-3.5 text-primary/50 shrink-0" />
+          </div>
         </div>
 
         {/* Top Sites */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Globe className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-medium tracking-wider text-muted-foreground uppercase">Top Sites</h3>
+        <section>
+          <div className="flex items-center gap-1.5 mb-3">
+            <Globe className="w-3 h-3 text-white/30" />
+            <span className="text-[11px] font-medium text-white/30 uppercase tracking-widest">Frequently visited</span>
           </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {loadingTopSites ? (
-              Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl bg-white/5" />)
-            ) : topSites?.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-muted-foreground">No top sites yet</div>
-            ) : (
-              topSites?.slice(0, 5).map((site, i) => (
-                <a 
-                  key={i} 
+          <div className="grid grid-cols-8 gap-2">
+            {loadingTop
+              ? Array(8).fill(0).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg bg-white/5" />)
+              : topSites?.slice(0, 8).map((site, i) => (
+                <a
+                  key={i}
                   href={site.url}
-                  className="glass-panel p-4 rounded-xl flex flex-col items-center gap-3 hover:bg-white/10 transition-all hover:-translate-y-1 hover:border-primary/50 group"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-white/6 transition-colors group"
                   data-testid={`top-site-${i}`}
                 >
-                  <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center border border-white/10 group-hover:border-primary/50 overflow-hidden">
-                    {site.favicon ? (
-                      <img src={site.favicon} alt="" className="w-6 h-6" />
-                    ) : (
-                      <Globe className="w-6 h-6 text-muted-foreground group-hover:text-primary" />
-                    )}
+                  <div className="w-8 h-8 rounded-lg bg-white/6 border border-white/8 flex items-center justify-center overflow-hidden group-hover:border-white/15 transition-colors">
+                    {site.favicon
+                      ? <img src={site.favicon} alt="" className="w-5 h-5" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      : <Globe className="w-4 h-4 text-white/25" />
+                    }
                   </div>
-                  <span className="text-sm font-medium truncate w-full text-center group-hover:text-primary transition-colors">{site.title || site.url}</span>
+                  <span className="text-[10px] text-white/40 group-hover:text-white/60 truncate w-full text-center transition-colors">
+                    {site.title?.split(" ")[0] || new URL(site.url).hostname.replace("www.", "")}
+                  </span>
                 </a>
               ))
-            )}
+            }
           </div>
-        </motion.div>
+        </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Two-column: suggestions + history */}
+        <div className="grid grid-cols-2 gap-6">
+
           {/* Smart Suggestions */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-4 h-4 text-secondary" />
-              <h3 className="text-sm font-medium tracking-wider text-muted-foreground uppercase">Smart Suggestions</h3>
+          <section>
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Sparkles className="w-3 h-3 text-primary/50" />
+              <span className="text-[11px] font-medium text-white/30 uppercase tracking-widest">Suggestions</span>
             </div>
-            
-            <div className="flex flex-col gap-3">
-              {loadingSuggestions ? (
-                Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg bg-white/5" />)
-              ) : suggestions?.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground glass-panel rounded-lg">No suggestions right now</div>
-              ) : (
-                suggestions?.slice(0, 3).map((suggestion, i) => (
-                  <Card key={i} className="glass-panel border-white/10 hover:border-secondary/50 transition-colors bg-transparent group cursor-pointer">
-                    <CardContent className="p-3 flex gap-4 items-center">
-                      <div className="w-10 h-10 rounded bg-secondary/10 flex items-center justify-center text-secondary">
-                        <Sparkles className="w-5 h-5" />
+            <div className="flex flex-col gap-px">
+              {loadingSugg
+                ? Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-9 rounded bg-white/5" />)
+                : suggestions?.slice(0, 5).map((s, i) => (
+                  <a
+                    key={i}
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2.5 h-9 px-2 rounded hover:bg-white/6 group transition-colors"
+                    data-testid={`suggestion-${i}`}
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary/40 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12px] text-white/60 group-hover:text-white/80 truncate transition-colors leading-tight">
+                        {s.title}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate text-white group-hover:text-secondary">{suggestion.title}</div>
-                        <div className="text-xs text-muted-foreground truncate">{suggestion.reason}</div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      <div className="text-[10px] text-white/25 truncate">{s.reason}</div>
+                    </div>
+                    <ArrowUpRight className="w-3 h-3 text-white/20 group-hover:text-white/50 opacity-0 group-hover:opacity-100 shrink-0 transition-all" />
+                  </a>
                 ))
-              )}
+              }
             </div>
-          </motion.div>
+          </section>
 
           {/* Recent History */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <Clock className="w-4 h-4 text-accent" />
-              <h3 className="text-sm font-medium tracking-wider text-muted-foreground uppercase">Recent History</h3>
+          <section>
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Clock className="w-3 h-3 text-white/30" />
+              <span className="text-[11px] font-medium text-white/30 uppercase tracking-widest">Recent</span>
             </div>
-            
-            <div className="flex flex-col gap-3">
-              {loadingHistory ? (
-                Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg bg-white/5" />)
-              ) : recentHistory?.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground glass-panel rounded-lg">No recent history</div>
-              ) : (
-                recentHistory?.slice(0, 4).map((entry, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group">
-                    <div className="w-8 h-8 rounded bg-black/40 flex items-center justify-center overflow-hidden flex-shrink-0">
-                       {entry.favicon ? (
-                        <img src={entry.favicon} alt="" className="w-4 h-4" />
-                      ) : (
-                        <Globe className="w-4 h-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0 flex justify-between items-center">
-                      <span className="text-sm font-medium truncate text-gray-300 group-hover:text-white">{entry.title || entry.url}</span>
-                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-4">
-                        {new Date(entry.visitedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
+            <div className="flex flex-col gap-px">
+              {loadingHist
+                ? Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-9 rounded bg-white/5" />)
+                : recentHistory?.slice(0, 6).map((entry, i) => {
+                  const favicon = getFavicon(entry.url);
+                  return (
+                    <a
+                      key={i}
+                      href={entry.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2.5 h-9 px-2 rounded hover:bg-white/6 group transition-colors"
+                      data-testid={`history-${i}`}
+                    >
+                      <div className="w-4 h-4 shrink-0 flex items-center justify-center">
+                        {favicon
+                          ? <img src={favicon} alt="" className="w-3.5 h-3.5" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          : <Globe className="w-3 h-3 text-white/25" />
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] text-white/60 group-hover:text-white/80 truncate transition-colors">
+                          {entry.title || entry.url}
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-white/25 shrink-0">{relativeTime(entry.visitedAt)}</span>
+                    </a>
+                  );
+                })
+              }
             </div>
-          </motion.div>
+          </section>
         </div>
-
       </div>
     </div>
   );

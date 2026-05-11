@@ -1,11 +1,13 @@
-import { useListWorkspaces, useCreateWorkspace, useUpdateWorkspace, useDeleteWorkspace, getListWorkspacesQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Plus, LayoutGrid, Trash2, Edit2, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import {
+  useListWorkspaces, useCreateWorkspace, useUpdateWorkspace, useDeleteWorkspace,
+  getListWorkspacesQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Plus, LayoutGrid, Trash2, Check } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const PRESET_COLORS = ["#00d4ff", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#6366f1", "#14b8a6"];
 
 export default function Workspaces() {
   const queryClient = useQueryClient();
@@ -15,140 +17,143 @@ export default function Workspaces() {
   const deleteWorkspace = useDeleteWorkspace();
 
   const [isCreating, setIsCreating] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newColor, setNewColor] = useState("#00ffcc"); // default cyan
+  const [newName, setNewName]       = useState("");
+  const [newColor, setNewColor]     = useState(PRESET_COLORS[0]);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getListWorkspacesQueryKey() });
 
   const handleCreate = () => {
-    if (!newName) return;
-    createWorkspace.mutate(
-      { data: { name: newName, color: newColor, icon: "LayoutGrid" } },
-      {
-        onSuccess: () => {
-          setIsCreating(false);
-          setNewName("");
-          queryClient.invalidateQueries({ queryKey: getListWorkspacesQueryKey() });
-        }
-      }
-    );
+    if (!newName.trim()) return;
+    createWorkspace.mutate({ data: { name: newName.trim(), color: newColor, icon: "LayoutGrid" } }, {
+      onSuccess: () => { setIsCreating(false); setNewName(""); invalidate(); },
+    });
   };
 
-  const handleSetActive = (id: number) => {
-    updateWorkspace.mutate(
-      { id, data: { isActive: true } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListWorkspacesQueryKey() });
-        }
-      }
-    );
-  };
+  const handleSetActive = (id: number) =>
+    updateWorkspace.mutate({ id, data: { isActive: true } }, { onSuccess: invalidate });
 
-  const handleDelete = (id: number) => {
-    deleteWorkspace.mutate(
-      { id },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListWorkspacesQueryKey() });
-        }
-      }
-    );
+  const handleDelete = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteWorkspace.mutate({ id }, { onSuccess: invalidate });
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto h-full overflow-y-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-2 flex items-center gap-3">
-            <LayoutGrid className="text-primary w-8 h-8" />
-            Workspaces
-          </h1>
-          <p className="text-muted-foreground">Manage your contexts and tab groups.</p>
-        </div>
-        <Button onClick={() => setIsCreating(true)} className="bg-primary/20 text-primary hover:bg-primary hover:text-black border border-primary/50 neon-box">
-          <Plus className="w-4 h-4 mr-2" /> New Workspace
-        </Button>
-      </div>
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-3xl mx-auto px-6 py-5 flex flex-col gap-4">
 
-      {isCreating && (
-        <Card className="mb-8 border-primary/50 bg-card/60 backdrop-blur-md">
-          <CardContent className="pt-6 flex items-end gap-4">
-            <div className="flex-1 space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Workspace Name</label>
-              <Input 
-                value={newName} 
-                onChange={e => setNewName(e.target.value)} 
-                placeholder="e.g. Work, Personal, Research"
-                className="bg-black/50 border-white/10"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Color</label>
-              <div className="flex gap-2">
-                {["#00ffcc", "#ff00ff", "#0088ff", "#ff0055", "#00ff00", "#ffaa00"].map(c => (
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white/75">Workspaces</div>
+            <div className="text-[11px] text-white/30 mt-0.5">Organize tabs by context</div>
+          </div>
+          <button
+            onClick={() => setIsCreating(!isCreating)}
+            className="flex items-center gap-1.5 h-7 px-3 rounded text-[12px] text-primary/70 hover:text-primary border border-primary/20 hover:border-primary/40 hover:bg-primary/8 transition-colors"
+            data-testid="btn-new-workspace"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New workspace
+          </button>
+        </div>
+
+        {/* Create form */}
+        {isCreating && (
+          <div className="rounded-lg border border-white/10 bg-white/4 p-4 flex flex-col gap-3">
+            <input
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleCreate()}
+              placeholder="Workspace name"
+              autoFocus
+              className="h-8 bg-white/6 border border-white/10 rounded px-2.5 text-sm text-white/75 placeholder:text-white/25 outline-none focus:border-white/25 transition-colors"
+              data-testid="input-workspace-name"
+            />
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-white/35">Color</span>
+              <div className="flex gap-1.5">
+                {PRESET_COLORS.map(c => (
                   <button
                     key={c}
                     onClick={() => setNewColor(c)}
-                    className={`w-10 h-10 rounded-full border-2 transition-all ${newColor === c ? 'border-white scale-110' : 'border-transparent'}`}
-                    style={{ backgroundColor: c, boxShadow: newColor === c ? `0 0 10px ${c}` : 'none' }}
+                    className={`w-5 h-5 rounded-full transition-transform ${newColor === c ? "scale-125 ring-2 ring-white/40 ring-offset-1 ring-offset-background" : "hover:scale-110"}`}
+                    style={{ backgroundColor: c }}
                   />
                 ))}
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setIsCreating(false)}>Cancel</Button>
-              <Button onClick={handleCreate} className="bg-primary text-black hover:bg-primary/80">Create</Button>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setIsCreating(false)}
+                className="h-7 px-3 rounded text-[12px] text-white/35 hover:text-white/55 hover:bg-white/6 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={!newName.trim() || createWorkspace.isPending}
+                className="h-7 px-3 rounded text-[12px] bg-primary/80 hover:bg-primary text-black font-medium transition-colors disabled:opacity-40"
+              >
+                Create
+              </button>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {isLoading ? (
-          Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl bg-white/5" />)
-        ) : workspaces?.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-muted-foreground border border-dashed border-white/10 rounded-xl">
-            No workspaces found. Create one to get started.
           </div>
-        ) : (
-          workspaces?.map((workspace) => (
-            <Card 
-              key={workspace.id} 
-              className={`relative overflow-hidden transition-all duration-300 glass-panel cursor-pointer group
-                ${workspace.isActive ? 'border-primary/50' : 'border-white/10 hover:border-white/30'}
-              `}
-              onClick={() => handleSetActive(workspace.id)}
-              style={workspace.isActive ? { boxShadow: `0 0 20px ${workspace.color}20, inset 0 0 10px ${workspace.color}10` } : {}}
-            >
-              <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: workspace.color }} />
-              
-              <CardContent className="p-6 flex flex-col h-full justify-between gap-6">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-black/40 flex items-center justify-center border border-white/10" style={{ color: workspace.color }}>
-                      <LayoutGrid className="w-5 h-5" />
+        )}
+
+        {/* Workspace list */}
+        {isLoading
+          ? <div className="space-y-1">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-14 w-full bg-white/5" />)}</div>
+          : workspaces?.length === 0
+            ? <div className="py-10 text-center text-sm text-white/25">No workspaces yet</div>
+            : (
+              <div className="rounded-lg border border-white/8 bg-white/3 divide-y divide-white/5 overflow-hidden">
+                {workspaces?.map(ws => (
+                  <div
+                    key={ws.id}
+                    onClick={() => handleSetActive(ws.id)}
+                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer group transition-colors hover:bg-white/4
+                      ${ws.isActive ? "bg-white/5" : ""}
+                    `}
+                    data-testid={`workspace-${ws.id}`}
+                  >
+                    {/* Color bar */}
+                    <div className="w-1 h-7 rounded-full shrink-0" style={{ backgroundColor: ws.color }} />
+
+                    {/* Icon */}
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center border border-white/8 shrink-0" style={{ borderColor: `${ws.color}30` }}>
+                      <LayoutGrid className="w-3.5 h-3.5" style={{ color: ws.color }} />
                     </div>
-                    <div>
-                      <h3 className="font-bold text-lg text-white">{workspace.name}</h3>
-                      <p className="text-sm text-muted-foreground">{workspace.tabCount} tabs</p>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[13px] font-medium ${ws.isActive ? "text-white/85" : "text-white/55"}`}>{ws.name}</span>
+                        {ws.isActive && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full border text-[10px]" style={{ color: ws.color, borderColor: `${ws.color}40`, backgroundColor: `${ws.color}12` }}>
+                            active
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-white/25 mt-0.5">{ws.tabCount} tabs</div>
+                    </div>
+
+                    {/* Controls */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      {ws.isActive && <Check className="w-3.5 h-3.5" style={{ color: ws.color }} />}
+                      <button
+                        onClick={e => handleDelete(ws.id, e)}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-500/15 text-white/20 hover:text-red-400 transition-colors"
+                        data-testid={`delete-workspace-${ws.id}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
-                  {workspace.isActive && (
-                    <CheckCircle2 className="w-5 h-5" style={{ color: workspace.color }} />
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-white" onClick={(e) => { e.stopPropagation(); }}>
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-destructive hover:bg-destructive/20" onClick={(e) => { e.stopPropagation(); handleDelete(workspace.id); }}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
+                ))}
+              </div>
+            )
+        }
       </div>
     </div>
   );

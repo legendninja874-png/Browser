@@ -1,195 +1,178 @@
-import { 
+import {
   useGetDashboardOverview, useGetActivityFeed, useGetSyncStatus, usePushSync, useGetTabStats,
-  getGetSyncStatusQueryKey
+  getGetSyncStatusQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, Cpu, Database, HardDrive, RefreshCw, Shield, LayoutGrid, Bookmark, History, Zap } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { RefreshCw, Shield, Cpu, HardDrive, Zap, LayoutGrid, Bookmark, History } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 
+const activityTypeColor: Record<string, string> = {
+  ai:        "bg-primary/60",
+  tab_group: "bg-blue-400/60",
+  sync:      "bg-emerald-400/60",
+  download:  "bg-amber-400/60",
+  bookmark:  "bg-violet-400/60",
+  security:  "bg-green-400/60",
+  tab_sleep: "bg-slate-400/60",
+  workspace: "bg-cyan-400/60",
+};
+
 export default function Dashboard() {
-  const queryClient = useQueryClient();
-  const { data: overview, isLoading: loadingOverview } = useGetDashboardOverview();
-  const { data: activity, isLoading: loadingActivity } = useGetActivityFeed();
-  const { data: sync, isLoading: loadingSync } = useGetSyncStatus();
+  const queryClient  = useQueryClient();
+  const { data: overview, isLoading: loadingOv }   = useGetDashboardOverview();
+  const { data: activity, isLoading: loadingAct }  = useGetActivityFeed();
+  const { data: sync,     isLoading: loadingSync } = useGetSyncStatus();
   const { data: tabStats, isLoading: loadingStats } = useGetTabStats();
   const pushSync = usePushSync();
 
-  const handleSync = () => {
+  const handleSync = () =>
     pushSync.mutate(
       { data: { includeTabs: true, includeBookmarks: true, includeHistory: true, includeSettings: true } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetSyncStatusQueryKey() });
-        }
-      }
+      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetSyncStatusQueryKey() }) },
     );
-  };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white mb-2 flex items-center gap-3">
-          <Activity className="text-primary w-8 h-8" />
-          Command Center
-        </h1>
-        <p className="text-muted-foreground">System telemetry and browser health.</p>
-      </div>
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-4xl mx-auto px-6 py-6 flex flex-col gap-6">
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Memory Used" value={overview ? `${overview.memoryUsedMb} MB` : ''} icon={Cpu} color="text-secondary" loading={loadingOverview} />
-        <StatCard title="Trackers Blocked" value={overview?.trackersBlocked.toLocaleString()} icon={Shield} color="text-green-500" loading={loadingOverview} />
-        <StatCard title="Data Saved" value={overview ? `${overview.dataSavedMb} MB` : ''} icon={HardDrive} color="text-primary" loading={loadingOverview} />
-        <StatCard title="AI Operations" value={overview?.aiUsesToday.toString()} icon={Zap} color="text-accent" loading={loadingOverview} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <Card className="glass-panel border-white/10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Database className="w-5 h-5 text-primary" />
-                Data Overview
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-black/30 rounded-lg p-4 border border-white/5 text-center">
-                  <div className="text-3xl font-bold text-white mb-1">{overview?.workspaceCount ?? 0}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider flex items-center justify-center gap-1"><LayoutGrid className="w-3 h-3"/> Workspaces</div>
-                </div>
-                <div className="bg-black/30 rounded-lg p-4 border border-white/5 text-center">
-                  <div className="text-3xl font-bold text-white mb-1">{overview?.bookmarkCount ?? 0}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider flex items-center justify-center gap-1"><Bookmark className="w-3 h-3"/> Bookmarks</div>
-                </div>
-                <div className="bg-black/30 rounded-lg p-4 border border-white/5 text-center">
-                  <div className="text-3xl font-bold text-white mb-1">{overview?.historyCount ?? 0}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider flex items-center justify-center gap-1"><History className="w-3 h-3"/> History Items</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-panel border-white/10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Activity className="w-5 h-5 text-secondary" />
-                Recent Activity
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingActivity ? (
-                <div className="space-y-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-              ) : (
-                <div className="space-y-4">
-                  {activity?.map(item => (
-                    <div key={item.id} className="flex items-start gap-4">
-                      <div className="w-2 h-2 rounded-full bg-secondary mt-2 flex-shrink-0 neon-box" />
-                      <div>
-                        <p className="text-sm font-medium text-white">{item.title}</p>
-                        <p className="text-xs text-muted-foreground">{item.description}</p>
-                        <p className="text-[10px] text-muted-foreground/70 mt-1 uppercase font-mono">
-                          {formatDistanceToNow(new Date(item.timestamp), { addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Page heading */}
+        <div>
+          <h1 className="text-sm font-semibold text-white/80 tracking-wide">Command Center</h1>
+          <p className="text-[11px] text-white/35 mt-0.5">Browser telemetry and system health</p>
         </div>
 
-        <div className="space-y-8">
-           <Card className="glass-panel border-white/10">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <RefreshCw className="w-5 h-5 text-accent" />
-                Sync Engine
-              </CardTitle>
-              <Button size="sm" variant="outline" className="h-8 border-accent/30 text-accent hover:bg-accent hover:text-black" onClick={handleSync} disabled={pushSync.isPending}>
-                <RefreshCw className={`w-3.5 h-3.5 mr-2 ${pushSync.isPending ? 'animate-spin' : ''}`} />
-                Force Sync
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {loadingSync ? <Skeleton className="h-32 w-full" /> : (
-                <div className="space-y-4 mt-4">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Status</span>
-                    <span className="text-green-500 font-mono font-medium flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> ONLINE
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Devices Connected</span>
-                    <span className="text-white font-mono font-medium">{sync?.deviceCount}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Last Synced</span>
-                    <span className="text-white font-mono font-medium text-xs">
-                      {sync?.lastSyncAt ? formatDistanceToNow(new Date(sync.lastSyncAt), { addSuffix: true }) : 'Never'}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Stats row */}
+        <div className="grid grid-cols-4 gap-3">
+          <Stat label="Memory"    value={overview ? `${Math.round(overview.memoryUsedMb)} MB` : undefined} icon={Cpu}      color="text-violet-400" loading={loadingOv} />
+          <Stat label="Trackers"  value={overview?.trackersBlocked.toLocaleString()}                         icon={Shield}   color="text-emerald-400" loading={loadingOv} />
+          <Stat label="Saved"     value={overview ? `${Math.round(overview.dataSavedMb)} MB` : undefined}    icon={HardDrive} color="text-primary" loading={loadingOv} />
+          <Stat label="AI Ops"    value={overview?.aiUsesToday?.toString()}                                   icon={Zap}      color="text-amber-400" loading={loadingOv} />
+        </div>
 
-          <Card className="glass-panel border-white/10 bg-gradient-to-br from-card/40 to-primary/5">
-            <CardHeader>
-              <CardTitle className="text-lg">Tab Diagnostics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingStats ? <Skeleton className="h-32 w-full" /> : (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-end border-b border-white/5 pb-2">
-                    <span className="text-muted-foreground text-sm">Total Active</span>
-                    <span className="text-2xl font-bold text-primary">{tabStats?.total}</span>
+        {/* Main grid */}
+        <div className="grid grid-cols-3 gap-4">
+
+          {/* Activity feed — spans 2 cols */}
+          <section className="col-span-2 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-white/35 uppercase tracking-widest">Recent Activity</span>
+            </div>
+            <div className="rounded-lg border border-white/8 bg-white/3 overflow-hidden divide-y divide-white/5">
+              {loadingAct
+                ? Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-10 w-full bg-white/5" />)
+                : activity?.slice(0, 8).map(item => (
+                  <div key={item.id} className="flex items-start gap-3 px-3 py-2.5 hover:bg-white/4 transition-colors">
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${activityTypeColor[item.type] ?? "bg-white/30"}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12px] text-white/70 leading-snug">{item.title}</div>
+                      <div className="text-[11px] text-white/35 truncate">{item.description}</div>
+                    </div>
+                    <span className="text-[10px] text-white/25 shrink-0 font-mono">
+                      {formatDistanceToNow(new Date(item.timestamp), { addSuffix: true })}
+                    </span>
                   </div>
-                  <div className="flex justify-between items-end border-b border-white/5 pb-2">
-                    <span className="text-muted-foreground text-sm">Sleeping</span>
-                    <span className="text-xl font-bold text-muted-foreground">{tabStats?.sleeping}</span>
-                  </div>
-                  <div className="flex justify-between items-end border-b border-white/5 pb-2">
-                    <span className="text-muted-foreground text-sm">Pinned</span>
-                    <span className="text-xl font-bold text-secondary">{tabStats?.pinned}</span>
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <span className="text-muted-foreground text-sm">Incognito</span>
-                    <span className="text-xl font-bold text-accent">{tabStats?.incognito}</span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                ))
+              }
+            </div>
+          </section>
+
+          {/* Right column */}
+          <div className="flex flex-col gap-4">
+
+            {/* Data counts */}
+            <section className="flex flex-col gap-2">
+              <span className="text-[11px] font-medium text-white/35 uppercase tracking-widest">Library</span>
+              <div className="rounded-lg border border-white/8 bg-white/3 divide-y divide-white/5">
+                <DataRow icon={LayoutGrid} label="Workspaces" value={overview?.workspaceCount} loading={loadingOv} />
+                <DataRow icon={Bookmark}   label="Bookmarks"  value={overview?.bookmarkCount}  loading={loadingOv} />
+                <DataRow icon={History}    label="History"    value={overview?.historyCount}    loading={loadingOv} />
+              </div>
+            </section>
+
+            {/* Tab stats */}
+            <section className="flex flex-col gap-2">
+              <span className="text-[11px] font-medium text-white/35 uppercase tracking-widest">Tabs</span>
+              <div className="rounded-lg border border-white/8 bg-white/3 divide-y divide-white/5">
+                <DataRow label="Total"    value={tabStats?.total}    loading={loadingStats} />
+                <DataRow label="Sleeping" value={tabStats?.sleeping} loading={loadingStats} />
+                <DataRow label="Pinned"   value={tabStats?.pinned}   loading={loadingStats} />
+                <DataRow label="Incognito" value={tabStats?.incognito} loading={loadingStats} />
+              </div>
+            </section>
+
+            {/* Sync */}
+            <section className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-white/35 uppercase tracking-widest">Sync</span>
+                <button
+                  onClick={handleSync}
+                  disabled={pushSync.isPending}
+                  className="flex items-center gap-1 text-[11px] text-primary/70 hover:text-primary px-2 py-0.5 rounded hover:bg-primary/10 transition-colors disabled:opacity-40"
+                >
+                  <RefreshCw className={`w-3 h-3 ${pushSync.isPending ? "animate-spin" : ""}`} />
+                  Sync now
+                </button>
+              </div>
+              <div className="rounded-lg border border-white/8 bg-white/3 divide-y divide-white/5">
+                {loadingSync ? <Skeleton className="h-16 w-full" /> : (
+                  <>
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-[11px] text-white/40">Status</span>
+                      <span className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Online
+                      </span>
+                    </div>
+                    <DataRow label="Devices" value={sync?.deviceCount} loading={false} />
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-[11px] text-white/40">Last sync</span>
+                      <span className="text-[11px] text-white/60 font-mono">
+                        {sync?.lastSyncAt
+                          ? formatDistanceToNow(new Date(sync.lastSyncAt), { addSuffix: true })
+                          : "Never"}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function StatCard({ title, value, icon: Icon, color, loading }: { title: string, value?: string, icon: any, color: string, loading: boolean }) {
+function Stat({ label, value, icon: Icon, color, loading }: {
+  label: string; value?: string; icon: React.ElementType; color: string; loading: boolean;
+}) {
   return (
-    <Card className="glass-panel border-white/10 relative overflow-hidden group">
-      <div className={`absolute top-0 right-0 w-24 h-24 bg-current opacity-5 rounded-bl-full translate-x-8 -translate-y-8 transition-transform group-hover:scale-110 ${color}`} />
-      <CardContent className="p-6">
-        <div className="flex items-center gap-4">
-          <div className={`p-3 rounded-xl bg-black/40 border border-white/5 ${color}`}>
-            <Icon className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            {loading ? (
-              <Skeleton className="h-8 w-20 mt-1" />
-            ) : (
-              <h3 className="text-2xl font-bold text-white font-mono mt-1">{value}</h3>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="rounded-lg border border-white/8 bg-white/3 px-3 py-3 flex items-center gap-3">
+      <Icon className={`w-4 h-4 shrink-0 ${color}`} />
+      <div className="min-w-0">
+        <div className="text-[11px] text-white/35">{label}</div>
+        {loading
+          ? <Skeleton className="h-4 w-16 mt-1 bg-white/5" />
+          : <div className="text-sm font-semibold text-white/85 font-mono tabular-nums">{value ?? "—"}</div>
+        }
+      </div>
+    </div>
+  );
+}
+
+function DataRow({ label, value, loading, icon: Icon }: {
+  label: string; value?: number; loading: boolean; icon?: React.ElementType;
+}) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center gap-2">
+        {Icon && <Icon className="w-3 h-3 text-white/30" />}
+        <span className="text-[11px] text-white/40">{label}</span>
+      </div>
+      {loading
+        ? <Skeleton className="h-3.5 w-8 bg-white/5" />
+        : <span className="text-[12px] font-semibold text-white/70 font-mono">{value ?? 0}</span>
+      }
+    </div>
   );
 }

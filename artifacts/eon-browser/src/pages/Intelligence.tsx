@@ -1,27 +1,40 @@
 import { useState, useRef, useEffect } from "react";
-import { useListConversations, useGetConversationMessages, useSendAiMessage, useGetSmartSuggestions, getGetConversationMessagesQueryKey, getListConversationsQueryKey } from "@workspace/api-client-react";
+import {
+  useListConversations, useGetConversationMessages, useSendAiMessage, useGetSmartSuggestions,
+  getGetConversationMessagesQueryKey, getListConversationsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { BrainCircuit, Send, User, Bot, Sparkles, FileText, Languages, Code2, Search as SearchIcon, PenTool } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { BrainCircuit, Send, User, Bot, Sparkles, FileText, Languages, Code2, Search as SearchIcon, PenTool, Plus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+
+const AI_TOOLS = [
+  { icon: FileText,    label: "Summarize",  color: "text-blue-400" },
+  { icon: Languages,   label: "Translate",  color: "text-emerald-400" },
+  { icon: Code2,       label: "Code",       color: "text-amber-400" },
+  { icon: SearchIcon,  label: "Research",   color: "text-violet-400" },
+  { icon: PenTool,     label: "Write",      color: "text-pink-400" },
+  { icon: Sparkles,    label: "Explain",    color: "text-primary" },
+];
+
+function relativeTime(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.floor(mins / 60)}h ago`;
+}
 
 export default function Intelligence() {
   const queryClient = useQueryClient();
   const { data: conversations, isLoading: loadingConvos } = useListConversations();
   const [activeConvoId, setActiveConvoId] = useState<number | null>(null);
-
-  const { data: messages, isLoading: loadingMessages } = useGetConversationMessages(activeConvoId || 0, {
-    query: { enabled: !!activeConvoId, queryKey: getGetConversationMessagesQueryKey(activeConvoId || 0) }
+  const { data: messages, isLoading: loadingMessages } = useGetConversationMessages(activeConvoId ?? 0, {
+    query: { enabled: !!activeConvoId, queryKey: getGetConversationMessagesQueryKey(activeConvoId ?? 0) },
   });
-
   const { data: suggestions } = useGetSmartSuggestions();
-  const sendMessage = useSendAiMessage();
-
+  const sendMessage  = useSendAiMessage();
   const [input, setInput] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (conversations && conversations.length > 0 && !activeConvoId) {
@@ -30,164 +43,179 @@ export default function Intelligence() {
   }, [conversations, activeConvoId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSend = () => {
     if (!input.trim()) return;
     const content = input;
     setInput("");
-    
     sendMessage.mutate(
       { data: { content, conversationId: activeConvoId } },
       {
-        onSuccess: (res) => {
-          // If a new conversation was created implicitly by the backend, we might need to refetch list and set active
-          queryClient.invalidateQueries({ queryKey: getGetConversationMessagesQueryKey(activeConvoId || 0) });
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetConversationMessagesQueryKey(activeConvoId ?? 0) });
           queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
-        }
-      }
+        },
+      },
     );
   };
 
   return (
-    <div className="flex h-full w-full bg-background overflow-hidden">
-      {/* Sidebar - History & Tools */}
-      <div className="w-80 border-r border-white/10 bg-card/40 backdrop-blur-xl flex flex-col shrink-0 z-10 shadow-2xl">
-        <div className="p-6 border-b border-white/10 bg-gradient-to-br from-primary/10 to-transparent">
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-3">
-            <BrainCircuit className="text-primary w-7 h-7" />
-            EoN Core
-          </h1>
-          <p className="text-sm text-muted-foreground mt-2">Browser Intelligence System</p>
+    <div className="flex h-full bg-background overflow-hidden">
+
+      {/* Left panel — conversations */}
+      <div className="w-[200px] flex flex-col border-r border-white/8 bg-sidebar shrink-0">
+
+        <div className="flex items-center justify-between px-3 h-9 border-b border-white/8 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <BrainCircuit className="w-3.5 h-3.5 text-primary/70" />
+            <span className="text-[11px] font-semibold text-white/60">EoN AI</span>
+          </div>
+          <button className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-white/30 hover:text-white transition-colors">
+            <Plus className="w-3 h-3" />
+          </button>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-4 space-y-6">
-            <div>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">AI Tools</h3>
-              <div className="grid grid-cols-2 gap-2">
-                <ToolBtn icon={FileText} label="Summarize" color="text-blue-400" />
-                <ToolBtn icon={Languages} label="Translate" color="text-green-400" />
-                <ToolBtn icon={Code2} label="Code Assist" color="text-yellow-400" />
-                <ToolBtn icon={SearchIcon} label="Research" color="text-purple-400" />
-                <ToolBtn icon={PenTool} label="Write" color="text-pink-400" />
-                <ToolBtn icon={Sparkles} label="Explain" color="text-primary" />
-              </div>
-            </div>
+        {/* Tools */}
+        <div className="px-2 py-2 border-b border-white/8 shrink-0">
+          <div className="text-[10px] text-white/25 uppercase tracking-widest mb-1.5 px-1">Tools</div>
+          <div className="grid grid-cols-3 gap-1">
+            {AI_TOOLS.map(({ icon: Icon, label, color }) => (
+              <button
+                key={label}
+                className="flex flex-col items-center gap-1 py-1.5 px-1 rounded hover:bg-white/8 transition-colors group"
+              >
+                <Icon className={`w-3.5 h-3.5 ${color} opacity-60 group-hover:opacity-100 transition-opacity`} />
+                <span className="text-[9px] text-white/30 group-hover:text-white/50">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-            <div>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">Conversations</h3>
-              <div className="space-y-1">
-                {loadingConvos ? (
-                  Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg bg-white/5" />)
-                ) : conversations?.map(convo => (
-                  <div 
-                    key={convo.id}
-                    onClick={() => setActiveConvoId(convo.id)}
-                    className={`px-3 py-2.5 rounded-lg cursor-pointer transition-all flex flex-col gap-1
-                      ${activeConvoId === convo.id ? 'bg-primary/20 border border-primary/30 neon-box' : 'hover:bg-white/5 border border-transparent'}
-                    `}
-                  >
-                    <span className={`text-sm font-medium truncate ${activeConvoId === convo.id ? 'text-primary' : 'text-gray-300'}`}>
-                      {convo.title}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{convo.messageCount} messages</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* Conversation list */}
+        <ScrollArea className="flex-1">
+          <div className="py-1 px-1.5 flex flex-col gap-px">
+            <div className="text-[10px] text-white/25 uppercase tracking-widest px-2 py-1">Conversations</div>
+            {loadingConvos
+              ? Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded bg-white/5" />)
+              : conversations?.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setActiveConvoId(c.id)}
+                  className={`flex flex-col items-start gap-0.5 w-full px-2 py-2 rounded text-left transition-colors
+                    ${activeConvoId === c.id ? "bg-white/10 border-l-2 border-primary pl-[6px]" : "hover:bg-white/6 border-l-2 border-transparent pl-[6px]"}`}
+                >
+                  <span className={`text-[11px] truncate w-full ${activeConvoId === c.id ? "text-white/80" : "text-white/45"}`}>
+                    {c.title}
+                  </span>
+                  <span className="text-[10px] text-white/25">{c.messageCount} msgs · {relativeTime(c.updatedAt)}</span>
+                </button>
+              ))
+            }
           </div>
         </ScrollArea>
       </div>
 
-      {/* Main Chat Interface */}
-      <div className="flex-1 flex flex-col relative">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_var(--tw-gradient-stops))] from-primary/5 via-background to-background pointer-events-none" />
-        
+      {/* Chat area */}
+      <div className="flex-1 flex flex-col min-w-0">
+
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-8 relative z-10">
-          <div className="max-w-3xl mx-auto space-y-6 pb-4">
-            {activeConvoId ? (
-              loadingMessages ? (
-                <div className="space-y-6">
-                  <Skeleton className="h-24 w-3/4 bg-white/5 rounded-2xl rounded-tl-none" />
-                  <Skeleton className="h-16 w-1/2 bg-primary/10 rounded-2xl rounded-tr-none ml-auto" />
-                </div>
-              ) : messages?.length === 0 ? (
-                <div className="text-center py-20 flex flex-col items-center gap-4">
-                   <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center neon-box">
-                     <BrainCircuit className="w-8 h-8 text-primary" />
-                   </div>
-                   <p className="text-muted-foreground">Start a new conversation with EoN AI.</p>
-                </div>
-              ) : (
-                messages?.map(msg => (
-                  <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${msg.role === 'user' ? 'bg-secondary/20 border-secondary text-secondary' : 'bg-primary/20 border-primary text-primary neon-box'}`}>
-                      {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                    </div>
-                    <div className={`p-4 rounded-2xl max-w-[80%] ${msg.role === 'user' ? 'bg-secondary/10 border border-secondary/20 rounded-tr-none text-white' : 'glass-panel border-primary/30 rounded-tl-none text-gray-200'}`}>
-                      {msg.content}
-                    </div>
-                  </div>
-                ))
-              )
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="max-w-2xl mx-auto flex flex-col gap-4">
+            {!activeConvoId ? (
+              <div className="flex flex-col items-center justify-center h-48 gap-3">
+                <BrainCircuit className="w-8 h-8 text-primary/30" />
+                <p className="text-sm text-white/25">Select a conversation or start a new one</p>
+              </div>
+            ) : loadingMessages ? (
+              <div className="space-y-4">
+                <Skeleton className="h-12 w-3/4 bg-white/5 rounded-lg" />
+                <Skeleton className="h-8 w-1/2 bg-white/5 rounded-lg ml-auto" />
+              </div>
+            ) : messages?.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 gap-3">
+                <BrainCircuit className="w-8 h-8 text-primary/30" />
+                <p className="text-sm text-white/25">Send a message to get started</p>
+              </div>
             ) : (
-               <div className="text-center py-20 flex flex-col items-center gap-4">
-                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center neon-box">
-                   <BrainCircuit className="w-8 h-8 text-primary" />
-                 </div>
-                 <h2 className="text-2xl font-light text-white">EoN Intelligence</h2>
-                 <p className="text-muted-foreground">Select or start a conversation.</p>
+              messages?.map(msg => (
+                <div key={msg.id} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${
+                    msg.role === "user"
+                      ? "bg-white/5 border-white/10 text-white/40"
+                      : "bg-primary/10 border-primary/20 text-primary/60"
+                  }`}>
+                    {msg.role === "user" ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
+                  </div>
+                  <div className={`px-3 py-2 rounded-lg text-sm leading-relaxed max-w-[78%] ${
+                    msg.role === "user"
+                      ? "bg-white/6 border border-white/10 text-white/75 rounded-tr-sm"
+                      : "bg-primary/6 border border-primary/15 text-white/70 rounded-tl-sm"
+                  }`}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))
+            )}
+
+            {sendMessage.isPending && (
+              <div className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                  <Bot className="w-3 h-3 text-primary/60" />
+                </div>
+                <div className="px-3 py-2 rounded-lg bg-primary/6 border border-primary/15">
+                  <div className="flex gap-1">
+                    <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
+            <div ref={bottomRef} />
           </div>
         </div>
 
-        {/* Input Area */}
-        <div className="p-6 bg-background/80 backdrop-blur-xl border-t border-white/10 shrink-0 z-10">
-          <div className="max-w-3xl mx-auto">
+        {/* Input */}
+        <div className="px-6 py-3 border-t border-white/8 shrink-0 bg-background/95">
+          <div className="max-w-2xl mx-auto">
+            {/* Suggestion pills */}
             {suggestions && suggestions.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-4 mb-2 no-scrollbar">
+              <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2">
                 {suggestions.slice(0, 3).map((s, i) => (
-                  <div key={i} className="flex-shrink-0 px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-xs text-muted-foreground hover:text-white hover:border-primary/50 cursor-pointer transition-colors whitespace-nowrap" onClick={() => setInput(`Tell me about: ${s.title}`)}>
-                    <Sparkles className="w-3 h-3 inline mr-1 text-primary" /> {s.title}
-                  </div>
+                  <button
+                    key={i}
+                    onClick={() => setInput(`Tell me about: ${s.title}`)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-white/8 bg-white/4 text-[11px] text-white/40 hover:text-white/60 hover:border-white/15 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <Sparkles className="w-2.5 h-2.5 text-primary/40" />
+                    {s.title.slice(0, 30)}{s.title.length > 30 ? "..." : ""}
+                  </button>
                 ))}
               </div>
             )}
-            
-            <div className="relative flex items-end gap-2 p-2 glass-panel border-primary/30 rounded-xl neon-box focus-within:border-primary transition-colors">
-              <textarea 
+
+            <div className="flex items-end gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 focus-within:border-primary/25 focus-within:bg-white/6 transition-colors">
+              <textarea
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="Ask EoN AI anything..."
-                className="w-full bg-transparent border-0 resize-none outline-none text-white p-2 min-h-[44px] max-h-[200px]"
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="Ask EoN Intelligence..."
+                className="flex-1 bg-transparent border-none outline-none text-sm text-white/75 placeholder:text-white/25 resize-none min-h-[24px] max-h-[120px] leading-snug"
                 rows={1}
               />
-              <Button 
-                onClick={handleSend} 
+              <button
+                onClick={handleSend}
                 disabled={sendMessage.isPending || !input.trim()}
-                className="shrink-0 h-11 w-11 rounded-lg bg-primary text-black hover:bg-primary/80"
+                className="w-7 h-7 flex items-center justify-center rounded-md bg-primary/80 hover:bg-primary text-black transition-colors disabled:opacity-30 shrink-0"
               >
-                <Send className="w-5 h-5 ml-1" />
-              </Button>
+                <Send className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ToolBtn({ icon: Icon, label, color }: { icon: any, label: string, color: string }) {
-  return (
-    <div className="p-3 rounded-xl border border-white/5 bg-black/40 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer flex flex-col items-center gap-2 group">
-      <Icon className={`w-5 h-5 ${color} opacity-70 group-hover:opacity-100 group-hover:scale-110 transition-all`} />
-      <span className="text-xs font-medium text-muted-foreground group-hover:text-white">{label}</span>
     </div>
   );
 }

@@ -1,115 +1,172 @@
-import { Settings as SettingsIcon, Monitor, Shield, Zap, RefreshCw, Palette } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { useState } from "react";
+import { Monitor, Shield, Zap, RefreshCw, Palette, ChevronRight } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
+type SectionId = "appearance" | "privacy" | "performance" | "sync" | "system";
+
+const NAV_ITEMS: { id: SectionId; icon: React.ElementType; label: string }[] = [
+  { id: "appearance",  icon: Palette,    label: "Appearance" },
+  { id: "privacy",     icon: Shield,     label: "Privacy & Security" },
+  { id: "performance", icon: Zap,        label: "Performance" },
+  { id: "sync",        icon: RefreshCw,  label: "Sync" },
+  { id: "system",      icon: Monitor,    label: "System" },
+];
+
+const THEME_OPTIONS = [
+  { name: "Neon Void",    color: "#00d4ff" },
+  { name: "Synthwave",    color: "#a855f7" },
+  { name: "Deep Ocean",   color: "#3b82f6" },
+];
+
 export default function Settings() {
+  const [activeSection, setActiveSection] = useState<SectionId>("appearance");
+  const [tabSleep, setTabSleep]           = useState(true);
+  const [animations, setAnimations]       = useState(true);
+  const [adBlock, setAdBlock]             = useState(true);
+  const [fingerprint, setFingerprint]     = useState(true);
+  const [httpsOnly, setHttpsOnly]         = useState(true);
+  const [autoSync, setAutoSync]           = useState(true);
+  const [activeTheme, setActiveTheme]     = useState("Neon Void");
+
   return (
-    <div className="p-8 max-w-4xl mx-auto h-full overflow-y-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-white mb-2 flex items-center gap-3">
-          <SettingsIcon className="text-muted-foreground w-8 h-8" />
-          Settings
-        </h1>
-        <p className="text-muted-foreground">Configure your EoN Browser experience.</p>
+    <div className="flex h-full bg-background overflow-hidden">
+
+      {/* Settings nav */}
+      <div className="w-[180px] flex flex-col border-r border-white/8 bg-sidebar shrink-0">
+        <div className="flex items-center gap-1.5 px-3 h-9 border-b border-white/8 shrink-0">
+          <span className="text-[11px] font-medium text-white/40 uppercase tracking-widest">Settings</span>
+        </div>
+        <div className="py-1.5 px-1.5 flex flex-col gap-px">
+          {NAV_ITEMS.map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              onClick={() => setActiveSection(id)}
+              className={`flex items-center gap-2.5 h-8 px-2 rounded w-full text-left transition-colors
+                ${activeSection === id ? "bg-white/10 text-white/80" : "text-white/35 hover:bg-white/6 hover:text-white/55"}`}
+              data-testid={`settings-nav-${id}`}
+            >
+              <Icon className="w-3.5 h-3.5 shrink-0" />
+              <span className="text-[12px] flex-1">{label}</span>
+              {activeSection === id && <ChevronRight className="w-3 h-3 text-white/30" />}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Sidebar Nav */}
-        <div className="w-full md:w-64 space-y-1 shrink-0">
-          <SettingsNavBtn icon={Palette} label="Appearance" active />
-          <SettingsNavBtn icon={Shield} label="Privacy & Security" />
-          <SettingsNavBtn icon={Zap} label="Performance" />
-          <SettingsNavBtn icon={RefreshCw} label="Sync" />
-          <SettingsNavBtn icon={Monitor} label="System" />
-        </div>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-xl mx-auto px-6 py-5 flex flex-col gap-5">
 
-        {/* Content */}
-        <div className="flex-1 space-y-8">
-          <Card className="glass-panel border-white/10">
-            <CardHeader>
-              <CardTitle>Theme & Appearance</CardTitle>
-              <CardDescription>Customize the look and feel of the browser.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <Label>Color Theme</Label>
-                <div className="grid grid-cols-3 gap-4">
-                  <ThemeOption name="Cyberpunk Neon" color="#00ffff" active />
-                  <ThemeOption name="Synthwave" color="#ff00ff" />
-                  <ThemeOption name="Void Dark" color="#444444" />
-                </div>
-              </div>
+          {activeSection === "appearance" && (
+            <>
+              <SectionHeader title="Appearance" subtitle="Customize the browser's look and feel" />
 
-              <Separator className="bg-white/10" />
+              <SettingsCard>
+                <SettingsRow label="Color theme" description="Choose your accent color palette">
+                  <div className="flex gap-2 mt-2">
+                    {THEME_OPTIONS.map(t => (
+                      <button
+                        key={t.name}
+                        onClick={() => setActiveTheme(t.name)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-[12px] transition-colors
+                          ${activeTheme === t.name ? "border-white/25 bg-white/8 text-white/75" : "border-white/8 text-white/35 hover:border-white/15"}`}
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                </SettingsRow>
+                <Separator className="bg-white/6" />
+                <SettingsToggle label="Subtle animations" description="Micro-interactions and transitions" value={animations} onChange={setAnimations} />
+              </SettingsCard>
+            </>
+          )}
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Cinematic Animations</Label>
-                  <p className="text-sm text-muted-foreground">Enable particle effects and heavy glows</p>
-                </div>
-                <Switch checked={true} />
-              </div>
+          {activeSection === "privacy" && (
+            <>
+              <SectionHeader title="Privacy & Security" subtitle="Control your data and tracking protection" />
+              <SettingsCard>
+                <SettingsToggle label="Ad & tracker blocker" description="Block ads and trackers across all sites" value={adBlock} onChange={setAdBlock} />
+                <Separator className="bg-white/6" />
+                <SettingsToggle label="Fingerprint protection" description="Prevent sites from identifying your browser" value={fingerprint} onChange={setFingerprint} />
+                <Separator className="bg-white/6" />
+                <SettingsToggle label="HTTPS-only mode" description="Warn when visiting non-secure sites" value={httpsOnly} onChange={setHttpsOnly} />
+              </SettingsCard>
+            </>
+          )}
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Glassmorphism Intensity</Label>
-                  <p className="text-sm text-muted-foreground">Amount of background blur on panels</p>
-                </div>
-                <Select defaultValue="high">
-                  <SelectTrigger className="w-[180px] bg-black/50 border-white/10">
-                    <SelectValue placeholder="Select intensity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low (Faster)</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High (Prettier)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+          {activeSection === "performance" && (
+            <>
+              <SectionHeader title="Performance" subtitle="Memory and CPU management" />
+              <SettingsCard>
+                <SettingsToggle label="Tab sleeping" description="Automatically sleep inactive tabs to save memory" value={tabSleep} onChange={setTabSleep} />
+                <Separator className="bg-white/6" />
+                <SettingsRow label="Sleep threshold" description="Time before an inactive tab sleeps">
+                  <Select defaultValue="30m">
+                    <SelectTrigger className="w-[140px] h-7 text-[12px] bg-white/6 border-white/10 mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5m">5 minutes</SelectItem>
+                      <SelectItem value="15m">15 minutes</SelectItem>
+                      <SelectItem value="30m">30 minutes</SelectItem>
+                      <SelectItem value="1h">1 hour</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingsRow>
+              </SettingsCard>
+            </>
+          )}
 
-          <Card className="glass-panel border-white/10">
-            <CardHeader>
-              <CardTitle>Performance</CardTitle>
-              <CardDescription>Manage memory and CPU usage.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Tab Sleeping</Label>
-                  <p className="text-sm text-muted-foreground">Automatically sleep inactive tabs to save memory</p>
-                </div>
-                <Switch checked={true} />
-              </div>
+          {activeSection === "sync" && (
+            <>
+              <SectionHeader title="Sync" subtitle="Keep your data across devices" />
+              <SettingsCard>
+                <SettingsToggle label="Automatic sync" description="Sync changes automatically in the background" value={autoSync} onChange={setAutoSync} />
+                <Separator className="bg-white/6" />
+                <SettingsRow label="Sync interval" description="How often to sync with the cloud">
+                  <Select defaultValue="5m">
+                    <SelectTrigger className="w-[140px] h-7 text-[12px] bg-white/6 border-white/10 mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1m">Every minute</SelectItem>
+                      <SelectItem value="5m">Every 5 minutes</SelectItem>
+                      <SelectItem value="15m">Every 15 minutes</SelectItem>
+                      <SelectItem value="30m">Every 30 minutes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingsRow>
+              </SettingsCard>
+            </>
+          )}
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Sleep Timer</Label>
-                  <p className="text-sm text-muted-foreground">Time before an inactive tab goes to sleep</p>
-                </div>
-                <Select defaultValue="30m">
-                  <SelectTrigger className="w-[180px] bg-black/50 border-white/10">
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5m">5 Minutes</SelectItem>
-                    <SelectItem value="15m">15 Minutes</SelectItem>
-                    <SelectItem value="30m">30 Minutes</SelectItem>
-                    <SelectItem value="1h">1 Hour</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <div className="flex justify-end gap-4">
-             <Button variant="outline" className="border-white/10 hover:bg-white/5">Reset Defaults</Button>
-             <Button className="bg-primary text-black hover:bg-primary/80">Save Changes</Button>
+          {activeSection === "system" && (
+            <>
+              <SectionHeader title="System" subtitle="About EoN Browser" />
+              <SettingsCard>
+                <SettingsRow label="Version" description="Current release">
+                  <span className="text-[12px] text-white/40 font-mono mt-1">1.0.0-alpha</span>
+                </SettingsRow>
+                <Separator className="bg-white/6" />
+                <SettingsRow label="Engine" description="Rendering stack">
+                  <span className="text-[12px] text-white/40 font-mono mt-1">EoN Engine · Chromium 124</span>
+                </SettingsRow>
+              </SettingsCard>
+            </>
+          )}
+
+          {/* Save */}
+          <div className="flex justify-end gap-2 pt-1">
+            <button className="h-7 px-4 rounded text-[12px] text-white/35 hover:text-white/55 hover:bg-white/6 border border-white/8 transition-colors">
+              Reset
+            </button>
+            <button className="h-7 px-4 rounded text-[12px] bg-primary/80 hover:bg-primary text-black font-medium transition-colors">
+              Save changes
+            </button>
           </div>
         </div>
       </div>
@@ -117,24 +174,45 @@ export default function Settings() {
   );
 }
 
-function SettingsNavBtn({ icon: Icon, label, active = false }: { icon: any, label: string, active?: boolean }) {
+function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-colors
-      ${active ? 'bg-primary/20 text-primary border border-primary/30 neon-box' : 'text-gray-400 hover:bg-white/5 hover:text-white border border-transparent'}
-    `}>
-      <Icon className="w-5 h-5" />
-      <span className="font-medium text-sm">{label}</span>
+    <div>
+      <div className="text-sm font-semibold text-white/75">{title}</div>
+      <div className="text-[11px] text-white/30 mt-0.5">{subtitle}</div>
     </div>
   );
 }
 
-function ThemeOption({ name, color, active = false }: { name: string, color: string, active?: boolean }) {
+function SettingsCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`p-4 rounded-xl border flex flex-col items-center gap-3 cursor-pointer transition-all
-      ${active ? 'border-primary bg-primary/10' : 'border-white/10 bg-black/40 hover:border-white/30'}
-    `}>
-      <div className="w-12 h-12 rounded-full shadow-lg" style={{ backgroundColor: color, boxShadow: active ? `0 0 15px ${color}` : 'none' }} />
-      <span className="text-sm font-medium text-center">{name}</span>
+    <div className="rounded-lg border border-white/8 bg-white/3 divide-y divide-white/5 overflow-hidden">
+      {children}
+    </div>
+  );
+}
+
+function SettingsToggle({ label, description, value, onChange }: {
+  label: string; description: string; value: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      <div className="min-w-0 flex-1 mr-4">
+        <div className="text-[12px] text-white/65">{label}</div>
+        <div className="text-[11px] text-white/30 mt-0.5">{description}</div>
+      </div>
+      <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
+    </div>
+  );
+}
+
+function SettingsRow({ label, description, children }: {
+  label: string; description: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col px-4 py-3">
+      <div className="text-[12px] text-white/65">{label}</div>
+      <div className="text-[11px] text-white/30 mt-0.5">{description}</div>
+      {children}
     </div>
   );
 }
