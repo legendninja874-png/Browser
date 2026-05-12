@@ -1,0 +1,25 @@
+{
+  "name": "eon-browser-desktop",
+  "version": "1.0.0",
+  "description": "EoN Browser — Desktop App (Electron)",
+  "main": "electron-main.js",
+  "author": "EoN Browser",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "NODE_ENV=development electron .",
+    "build": "electron-builder --config electron-builder.json",
+    "build:win": "electron-builder --win --config electron-builder.json",
+    "build:mac": "electron-builder --mac --config electron-builder.json",
+    "build:linux": "electron-builder --linux --config electron-builder.json"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "extends": "./electron-builder.json"
+  }
+}

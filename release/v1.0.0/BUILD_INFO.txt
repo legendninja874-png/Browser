@@ -1,0 +1,61 @@
+EoN Browser — Release Build
+============================
+Version:    1.0.0
+Built:      2026-05-12
+Platform:   Linux x64
+
+CONTENTS
+────────
+  web/                 Production web app (deploy anywhere)
+  api-server/          Backend API server (Node.js)
+  desktop/             Electron desktop wrapper
+  android-project/     Android Capacitor setup + APK guide
+
+WEB DEPLOYMENT
+──────────────
+Upload the web/ folder to:
+  - Netlify  → netlify.com → drag & drop the web/ folder
+  - Vercel   → vercel.com → upload web/ folder
+  - GitHub Pages → upload to repository
+  - Any static host → just serve index.html
+
+Or run locally with:
+  npx serve web/
+  Then open http://localhost:3000
+
+DESKTOP APP
+───────────
+Requirements: Node.js 18+ (https://nodejs.org)
+  cd desktop/
+  npm install
+  npm start     ← opens EoN Browser as a native window
+
+To package as installer:
+  npm install -g electron-builder
+  npm run build:win    → Windows .exe installer
+  npm run build:mac    → macOS .dmg
+  npm run build:linux  → Linux AppImage
+
+ANDROID APK
+───────────
+See: android-project/README.md
+Requires: Android Studio + Java JDK 17
+  ~20 minutes total build time
+
+PWA INSTALL (INSTANT — NO APP STORE)
+──────────────────────────────────────
+1. Deploy the web/ folder anywhere with HTTPS
+2. Open your URL in Chrome on Android
+3. Tap ⋮ → "Add to Home screen" → Add
+4. EoN Browser is now on your home screen!
+
+API SERVER
+──────────
+  node api-server/index.mjs
+  Runs on port 8080
+
+Build Sizes:
+  Frontend JS:   616 KB (192 KB gzipped)
+  Frontend CSS:  129 KB (20 KB gzipped)
+  Service Worker: 2.8 KB
+  Manifest:       2.1 KB

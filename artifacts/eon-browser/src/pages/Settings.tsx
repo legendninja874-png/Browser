@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   ChevronLeft, ChevronRight, Search, Check,
   Palette, Shield, Zap, RefreshCw, Monitor,
-  Globe, Bell, Download, Type, Moon, UserCircle, AlertTriangle
+  Globe, Bell, Download, Type, Moon, UserCircle, AlertTriangle,
+  Smartphone, Package
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,7 +29,29 @@ export default function Settings() {
   
   const [section, setSection] = useState<Section>("main");
   const [searchQuery, setSearchQuery] = useState("");
-  
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const onInstallable = () => setInstallPrompt((window as any).__eonInstallPrompt ?? null);
+    const onInstalled = () => { setIsInstalled(true); setInstallPrompt(null); };
+    window.addEventListener('eon-pwa-installable', onInstallable);
+    window.addEventListener('eon-pwa-installed', onInstalled);
+    if ((window as any).__eonInstallPrompt) setInstallPrompt((window as any).__eonInstallPrompt);
+    if (window.matchMedia('(display-mode: standalone)').matches) setIsInstalled(true);
+    return () => {
+      window.removeEventListener('eon-pwa-installable', onInstallable);
+      window.removeEventListener('eon-pwa-installed', onInstalled);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    (installPrompt as any).prompt();
+    const result = await (installPrompt as any).userChoice;
+    if (result.outcome === 'accepted') setIsInstalled(true);
+  };
+
   // Local state for UI only (not in store)
   const [httpsOnly, setHttpsOnly]     = useState(true);
   const [autoSync, setAutoSync]       = useState(true);
@@ -131,6 +154,29 @@ export default function Settings() {
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )}
+
+        {/* Install App Card */}
+        {!searchQuery && (installPrompt || isInstalled) && (
+          <div className={`rounded-[20px] p-4 flex items-center gap-4 border shadow-sm ${isInstalled ? 'bg-green-950/30 border-green-500/30' : 'bg-primary/10 border-primary/30'}`}>
+            <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 ${isInstalled ? 'bg-green-500/20' : 'bg-primary/20'}`}>
+              {isInstalled ? <Check className="w-6 h-6 text-green-400" /> : <Smartphone className="w-6 h-6 text-primary" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-bold text-foreground">{isInstalled ? 'App Installed' : 'Install EoN Browser'}</div>
+              <div className="text-[12px] text-muted-foreground mt-0.5">
+                {isInstalled ? 'EoN is on your home screen' : 'Add to home screen for the full app experience'}
+              </div>
+            </div>
+            {!isInstalled && (
+              <button
+                onClick={handleInstall}
+                className="px-4 py-2 rounded-full bg-primary text-white text-[13px] font-bold shrink-0 active:scale-95 transition-transform"
+              >
+                Install
+              </button>
+            )}
           </div>
         )}
 

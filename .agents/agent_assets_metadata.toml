@@ -6,3 +6,9 @@ id = "sST78qgPo9kkfWjFwB9ik"
 uri = "file://EON_BROWSER_GUIDE.md"
 type = "text"
 title = "EoN Browser — Complete Deployment Guide"
+
+[[outputs]]
+id = "GNBuVOimLU_OY1_DlHp0k"
+uri = "file://release/eon-browser-v1.0.0-release.tar.gz"
+type = "unspecified"
+title = "EoN Browser v1.0.0 — Full Release Package (1.7MB)"

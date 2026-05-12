@@ -1,0 +1,67 @@
+{
+  "appId": "com.eonbrowser.app",
+  "productName": "EoN Browser",
+  "copyright": "Copyright © 2026 EoN Browser",
+  "asar": true,
+  "compression": "maximum",
+
+  "directories": {
+    "output": "release/desktop",
+    "buildResources": "desktop/assets"
+  },
+
+  "files": [
+    "desktop/electron-main.js",
+    "desktop/preload.js",
+    "artifacts/eon-browser/dist/public/**/*",
+    "artifacts/eon-browser/public/icons/**/*",
+    "!**/node_modules/**",
+    "!**/*.map"
+  ],
+
+  "extraMetadata": {
+    "main": "desktop/electron-main.js"
+  },
+
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64"] },
+      { "target": "portable", "arch": ["x64"] }
+    ],
+    "icon": "artifacts/eon-browser/public/icons/icon-512.png",
+    "requestedExecutionLevel": "asInvoker"
+  },
+
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "EoN Browser"
+  },
+
+  "mac": {
+    "target": [
+      { "target": "dmg", "arch": ["x64", "arm64"] }
+    ],
+    "icon": "artifacts/eon-browser/public/icons/icon-512.png",
+    "category": "public.app-category.productivity",
+    "darkModeSupport": true
+  },
+
+  "dmg": {
+    "title": "EoN Browser",
+    "background": null,
+    "window": { "width": 540, "height": 380 }
+  },
+
+  "linux": {
+    "target": [
+      { "target": "AppImage", "arch": ["x64"] },
+      { "target": "deb", "arch": ["x64"] }
+    ],
+    "icon": "artifacts/eon-browser/public/icons/icon-512.png",
+    "category": "Network;WebBrowser",
+    "description": "EoN Browser — Premium mobile browser UI"
+  }
+}

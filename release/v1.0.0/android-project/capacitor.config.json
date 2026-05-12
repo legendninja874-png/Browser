@@ -1,0 +1,43 @@
+{
+  "appId": "com.eonbrowser.app",
+  "appName": "EoN Browser",
+  "webDir": "dist/public",
+  "bundledWebRuntime": false,
+  "backgroundColor": "#0d0d0d",
+  "android": {
+    "buildOptions": {
+      "keystorePath": "eon-browser.keystore",
+      "keystoreAlias": "eon-browser",
+      "releaseType": "APK"
+    },
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "allowsLinkPreview": false,
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#0d0d0d",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "style": "Dark",
+      "backgroundColor": "#0d0d0d"
+    },
+    "Keyboard": {
+      "resize": "body",
+      "style": "dark",
+      "resizeOnFullScreen": true
+    }
+  }
+}
