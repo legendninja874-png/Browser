@@ -3,6 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
+import { setBaseUrl } from "@workspace/api-client-react";
+
+const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+if (apiUrl) setBaseUrl(apiUrl);
 
 import { ThemeProvider } from "@/contexts/theme";
 import { Shell } from "@/components/layout/Shell";

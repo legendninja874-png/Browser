@@ -25,7 +25,25 @@ app.use(
     },
   }),
 );
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const allowed = [
+      /\.vercel\.app$/,
+      /localhost/,
+      /\.replit\.dev$/,
+      /\.replit\.app$/,
+    ];
+    const clientOrigin = process.env.CLIENT_ORIGIN;
+    if (clientOrigin) allowed.push(new RegExp(clientOrigin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    if (allowed.some((pattern) => pattern.test(origin))) {
+      callback(null, true);
+    } else {
+      callback(null, true);
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
