@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "sST78qgPo9kkfWjFwB9ik"
+uri = "file://EON_BROWSER_GUIDE.md"
+type = "text"
+title = "EoN Browser — Complete Deployment Guide"
