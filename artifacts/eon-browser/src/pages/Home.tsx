@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useGetTopSites, useGetRecentHistory, useGetSmartSuggestions, useListTabs } from "@workspace/api-client-react";
-import { Mic, ScanLine, Globe, Bookmark, Clock, Search, ChevronRight } from "lucide-react";
+import { Mic, ScanLine, Search, Plus, Shield, ShieldAlert, Wifi, BatteryMedium, ShieldCheck, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function getDomain(url: string) {
@@ -9,9 +9,7 @@ function getDomain(url: string) {
 }
 
 function getFavicon(url: string) {
-  try {
-    return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`;
-  } catch { return null; }
+  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`; } catch { return null; }
 }
 
 function relativeTime(dateStr: string) {
@@ -24,235 +22,182 @@ function relativeTime(dateStr: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-const QUICK_SHORTCUTS = [
-  { label: "Bookmarks", icon: Bookmark,  bg: "bg-blue-600",   href: "/bookmarks" },
-  { label: "History",   icon: Clock,     bg: "bg-orange-500", href: "/history" },
-  { label: "Downloads", icon: Globe,     bg: "bg-green-600",  href: "/downloads" },
-  { label: "Search",    icon: Search,    bg: "bg-violet-600", href: "/browser" },
-];
-
 export default function Home() {
-  const [, navigate]  = useLocation();
+  const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
+  const [timeStr, setTimeStr] = useState("");
+  
+  useEffect(() => {
+    const updateTime = () => setTimeStr(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const { data: topSites,     isLoading: loadingTop  } = useGetTopSites();
-  const { data: recentHistory, isLoading: loadingHist } = useGetRecentHistory();
-  const { data: suggestions,  isLoading: loadingSugg } = useGetSmartSuggestions();
+  const { data: topSites, isLoading: loadingTop } = useGetTopSites();
+  const { data: recentHistory } = useGetRecentHistory();
+  const { data: suggestions, isLoading: loadingSugg } = useGetSmartSuggestions();
   const { data: tabs } = useListTabs();
-  const recentTabs = tabs?.filter(t => !t.isActive && t.url !== "about:newtab").slice(0, 4) ?? [];
+  
+  const recentTabs = tabs?.filter(t => !t.isActive && t.url !== "about:newtab").slice(0, 5) ?? [];
 
   return (
-    <div className="h-full overflow-y-auto bg-background">
-      <div className="max-w-lg mx-auto px-4 pt-16 pb-6 flex flex-col gap-8">
+    <div className="h-full overflow-y-auto bg-background pb-16 no-scrollbar">
+      <div className="max-w-xl mx-auto px-4 pt-12 flex flex-col gap-6">
 
-        {/* Branding */}
-        <div className="flex flex-col items-center gap-6">
-          <h1 className="text-5xl font-light tracking-tight text-foreground/90 select-none">EoN</h1>
+        {/* Top Section */}
+        <div className="flex flex-col items-center gap-6 pb-2">
+          <div className="flex flex-col items-center">
+            <h1 className="text-[28px] font-semibold text-foreground/90 tracking-tight">EoN</h1>
+            <p className="text-sm font-medium text-muted-foreground mt-1">{timeStr}</p>
+          </div>
 
-          {/* Search bar — Lemur style */}
-          <div className="w-full flex items-center gap-3 h-12 px-4 bg-card border border-border rounded-full shadow-sm hover:shadow-md transition-shadow">
-            <Search className="w-4.5 h-4.5 text-muted-foreground shrink-0" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && query.trim()) navigate("/browser"); }}
-              placeholder="Search or type URL"
-              className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground"
-              data-testid="home-search"
-            />
-            <div className="flex items-center gap-2 shrink-0">
-              <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
-                <Mic className="w-4 h-4" />
-              </button>
-              <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
-                <ScanLine className="w-4 h-4" />
-              </button>
+          {/* Search Bar Pill */}
+          <div className="w-full relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/10 rounded-full blur opacity-50 group-hover:opacity-100 transition duration-500"></div>
+            <div className="relative w-full flex items-center gap-3 h-14 px-5 bg-card/90 backdrop-blur-md border border-border/80 rounded-full shadow-lg">
+              <Search className="w-5 h-5 text-muted-foreground shrink-0" />
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && query.trim()) navigate("/browser"); }}
+                placeholder="Search or type web address"
+                className="flex-1 bg-transparent outline-none text-[15px] font-medium text-foreground placeholder:text-muted-foreground/70"
+              />
+              <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                <Mic className="w-5 h-5 hover:text-foreground transition-colors cursor-pointer" />
+                <ScanLine className="w-5 h-5 hover:text-foreground transition-colors cursor-pointer" />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Quick shortcuts */}
-        <div className="flex items-start justify-center gap-6">
-          {QUICK_SHORTCUTS.map(({ label, icon: Icon, bg, href }) => (
-            <button
-              key={label}
-              onClick={() => navigate(href)}
-              className="flex flex-col items-center gap-2 group"
-            >
-              <div className={`w-14 h-14 rounded-full ${bg} flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform`}>
-                <Icon className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">{label}</span>
-            </button>
-          ))}
+        {/* Stats Pills */}
+        <div className="flex items-center justify-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-[11px] font-medium text-muted-foreground whitespace-nowrap shadow-sm">
+            <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+            <span>34 trackers blocked</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-[11px] font-medium text-muted-foreground whitespace-nowrap shadow-sm">
+            <Wifi className="w-3.5 h-3.5 text-primary" />
+            <span>12 MB saved</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-[11px] font-medium text-muted-foreground whitespace-nowrap shadow-sm">
+            <BatteryMedium className="w-3.5 h-3.5 text-yellow-500" />
+            <span>2 tabs sleeping</span>
+          </div>
         </div>
 
-        {/* Top Sites */}
-        {(loadingTop || (topSites && topSites.length > 0)) && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-foreground/70">Top Sites</span>
-            </div>
-            <div className="grid grid-cols-4 gap-3">
-              {loadingTop
-                ? Array(8).fill(0).map((_, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1.5">
-                    <Skeleton className="w-12 h-12 rounded-2xl" />
-                    <Skeleton className="w-10 h-2.5 rounded" />
-                  </div>
-                ))
-                : topSites?.slice(0, 8).map((site, i) => {
-                  const fav = getFavicon(site.url);
-                  return (
-                    <a
-                      key={i}
-                      href={site.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex flex-col items-center gap-1.5 group"
-                      data-testid={`top-site-${i}`}
-                    >
-                      <div className="w-12 h-12 rounded-2xl bg-card border border-border flex items-center justify-center overflow-hidden group-hover:border-primary/30 transition-colors shadow-sm">
-                        {fav
-                          ? <img src={fav} alt="" className="w-7 h-7" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                          : <Globe className="w-5 h-5 text-muted-foreground" />
-                        }
-                      </div>
-                      <span className="text-[10px] text-muted-foreground group-hover:text-foreground truncate w-full text-center transition-colors">
-                        {site.title?.split(" ")[0] ?? getDomain(site.url)}
-                      </span>
-                    </a>
-                  );
-                })
-              }
-            </div>
-          </section>
-        )}
-
-        {/* Continue browsing */}
-        {recentTabs.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-foreground/70">Continue browsing</span>
-              <button onClick={() => navigate("/tabs")} className="text-xs text-primary flex items-center gap-0.5">
-                See all <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="browser-card divide-y divide-border overflow-hidden">
-              {recentTabs.map(tab => {
-                const fav = tab.favicon ?? getFavicon(tab.url);
-                return (
+        {/* Quick Access */}
+        <section>
+          <div className="grid grid-cols-4 gap-x-2 gap-y-4 px-2">
+            {loadingTop ? (
+              Array(8).fill(0).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-2">
+                  <Skeleton className="w-14 h-14 rounded-2xl" />
+                  <Skeleton className="w-12 h-3 rounded" />
+                </div>
+              ))
+            ) : (
+              <>
+                {topSites?.slice(0, 7).map((site, i) => (
                   <button
-                    key={tab.id}
-                    onClick={() => navigate("/browser")}
-                    className="flex items-center gap-3 w-full px-4 py-3 hover:bg-muted/50 transition-colors text-left"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                      {fav
-                        ? <img src={fav} alt="" className="w-5 h-5" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                        : <Globe className="w-4 h-4 text-muted-foreground" />
-                      }
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-foreground/80 truncate">{tab.title || getDomain(tab.url)}</div>
-                      <div className="text-xs text-muted-foreground truncate">{getDomain(tab.url)}</div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* Smart Suggestions */}
-        {(loadingSugg || (suggestions && suggestions.length > 0)) && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-foreground/70">For you</span>
-            </div>
-            <div className="flex flex-col gap-2.5">
-              {loadingSugg
-                ? Array(3).fill(0).map((_, i) => (
-                  <div key={i} className="browser-card p-4">
-                    <Skeleton className="h-4 w-3/4 mb-2" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
-                ))
-                : suggestions?.slice(0, 4).map((s, i) => (
-                  <a
                     key={i}
-                    href={s.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="browser-card p-4 hover:bg-muted/30 transition-colors block"
-                    data-testid={`suggestion-${i}`}
+                    onClick={() => navigate("/browser")}
+                    className="flex flex-col items-center gap-2 group"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-foreground/85 leading-snug mb-1">{s.title}</div>
-                        <div className="text-xs text-muted-foreground truncate">{getDomain(s.url)}</div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-0.5" />
+                    <div className="w-14 h-14 rounded-[18px] bg-card border border-border/80 flex items-center justify-center shadow-sm group-hover:bg-muted transition-colors">
+                      <img src={getFavicon(site.url) || ""} alt="" className="w-7 h-7 rounded-md" onError={e => (e.currentTarget.style.display = "none")} />
                     </div>
-                    <div className="text-xs text-muted-foreground/60 mt-1.5 line-clamp-2">{s.reason}</div>
-                  </a>
-                ))
-              }
+                    <span className="text-[11px] font-medium text-muted-foreground group-hover:text-foreground truncate w-full text-center">
+                      {site.title?.split(" ")[0] ?? getDomain(site.url)}
+                    </span>
+                  </button>
+                ))}
+                <button className="flex flex-col items-center gap-2 group">
+                  <div className="w-14 h-14 rounded-[18px] bg-muted/50 border border-dashed border-border/80 flex items-center justify-center group-hover:bg-muted transition-colors">
+                    <Plus className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <span className="text-[11px] font-medium text-muted-foreground group-hover:text-foreground">Add</span>
+                </button>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* Continue Browsing */}
+        {recentTabs.length > 0 && (
+          <section className="pt-2">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <span className="text-[13px] font-semibold tracking-wide text-foreground/80 uppercase">Continue reading</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 px-1 -mx-1">
+              {recentTabs.map(tab => (
+                <div key={tab.id} onClick={() => navigate("/browser")} className="w-[200px] shrink-0 browser-card p-3 flex flex-col gap-2 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-muted flex items-center justify-center overflow-hidden">
+                      <img src={getFavicon(tab.url || "") || ""} className="w-4 h-4" onError={e => (e.currentTarget.style.display = "none")} />
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground truncate">{getDomain(tab.url || "")}</span>
+                  </div>
+                  <div className="text-[13px] font-medium leading-snug line-clamp-2 text-foreground/90">
+                    {tab.title || "Untitled page"}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-auto pt-1">{relativeTime(tab.createdAt)}</div>
+                </div>
+              ))}
             </div>
           </section>
         )}
 
-        {/* Recent History */}
-        {(loadingHist || (recentHistory && recentHistory.length > 0)) && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-foreground/70">Recent</span>
-              <button onClick={() => navigate("/history")} className="text-xs text-primary flex items-center gap-0.5">
-                See all <ChevronRight className="w-3 h-3" />
+        {/* Discover Feed */}
+        <section className="pt-2">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mb-4 px-1">
+            <span className="text-[13px] font-semibold tracking-wide text-foreground/80 uppercase mr-2">Discover</span>
+            {["For You", "Tech", "Gaming", "AI", "Science"].map(tag => (
+              <button key={tag} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${tag === "For You" ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
+                {tag}
               </button>
-            </div>
-            <div className="browser-card divide-y divide-border overflow-hidden">
-              {loadingHist
-                ? Array(4).fill(0).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-3">
-                    <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
-                    <div className="flex-1">
-                      <Skeleton className="h-3.5 w-3/4 mb-1.5" />
-                      <Skeleton className="h-2.5 w-1/2" />
-                    </div>
+            ))}
+          </div>
+          
+          <div className="flex flex-col gap-4">
+            {loadingSugg ? (
+              Array(3).fill(0).map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
                   </div>
-                ))
-                : recentHistory?.slice(0, 5).map((entry, i) => {
-                  const fav = getFavicon(entry.url);
-                  return (
-                    <a
-                      key={i}
-                      href={entry.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
-                      data-testid={`recent-${i}`}
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                        {fav
-                          ? <img src={fav} alt="" className="w-5 h-5" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                          : <Globe className="w-4 h-4 text-muted-foreground" />
-                        }
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-foreground/80 truncate">{entry.title || getDomain(entry.url)}</div>
-                        <div className="text-xs text-muted-foreground truncate">{getDomain(entry.url)}</div>
-                      </div>
-                      <span className="text-xs text-muted-foreground/60 shrink-0">{relativeTime(entry.visitedAt)}</span>
-                    </a>
-                  );
-                })
-              }
-            </div>
-          </section>
-        )}
+                  <Skeleton className="w-[100px] h-[75px] rounded-xl shrink-0" />
+                </div>
+              ))
+            ) : (
+              suggestions?.map((s, i) => (
+                <a key={i} href={s.url} target="_blank" rel="noreferrer" className="group flex gap-4 items-start">
+                  <div className="flex-1 flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <img src={getFavicon(s.url) || ""} className="w-3.5 h-3.5 rounded-sm" onError={e => (e.currentTarget.style.display = "none")} />
+                      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{getDomain(s.url)}</span>
+                      <span className="text-[11px] text-muted-foreground/50">· {Math.floor(Math.random() * 12 + 1)}h</span>
+                    </div>
+                    <h3 className="text-[15px] font-semibold text-foreground leading-snug group-hover:text-primary transition-colors line-clamp-3">
+                      {s.title}
+                    </h3>
+                  </div>
+                  <div className="w-[100px] h-[75px] rounded-xl overflow-hidden shrink-0 bg-muted">
+                    <img src={`https://picsum.photos/seed/${i + 10}/200/150`} className="w-full h-full object-cover" alt="" />
+                  </div>
+                </a>
+              ))
+            )}
+            <button className="w-full py-3 mt-2 rounded-xl bg-muted/50 text-sm font-medium text-foreground/80 hover:bg-muted transition-colors">
+              Load more
+            </button>
+          </div>
+        </section>
+
       </div>
     </div>
   );

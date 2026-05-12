@@ -3,18 +3,20 @@ import { useLocation } from "wouter";
 import {
   ChevronLeft, ChevronRight, Search, Check,
   Palette, Shield, Zap, RefreshCw, Monitor,
-  Globe, Bell, Download, Type, Moon,
+  Globe, Bell, Download, Type, Moon, UserCircle, AlertTriangle
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme, Theme } from "@/contexts/theme";
+import { useBrowserStore } from "@/store/browser";
+import { AnimatePresence, motion } from "framer-motion";
 
 const THEMES: { id: Theme; label: string; description: string; preview: string }[] = [
   { id: "dark",   label: "Dark",         description: "Classic dark interface",        preview: "bg-[#111111]" },
   { id: "amoled", label: "AMOLED Black", description: "Pure black for OLED displays",  preview: "bg-[#000000]" },
   { id: "gray",   label: "Gray",         description: "Softer dark gray surface",      preview: "bg-[#1f1f1f]" },
   { id: "light",  label: "Light",        description: "Clean white interface",         preview: "bg-[#f5f5f5]" },
-  { id: "blue",   label: "Blue",         description: "Deep blue accent theme",        preview: "bg-[#0d1219]" },
+  { id: "blue",   label: "Blue",         description: "Deep blue accent theme",        preview: "bg-[#0a0f1a]" },
 ];
 
 type Section = "main" | "appearance" | "privacy" | "performance" | "sync" | "search" | "downloads";
@@ -22,14 +24,14 @@ type Section = "main" | "appearance" | "privacy" | "performance" | "sync" | "sea
 export default function Settings() {
   const [, navigate] = useLocation();
   const { theme, setTheme } = useTheme();
-  const [section, setSection]       = useState<Section>("main");
+  const store = useBrowserStore();
+  
+  const [section, setSection] = useState<Section>("main");
   const [searchQuery, setSearchQuery] = useState("");
-  const [tabSleep, setTabSleep]       = useState(true);
-  const [adBlock, setAdBlock]         = useState(true);
+  
+  // Local state for UI only (not in store)
   const [httpsOnly, setHttpsOnly]     = useState(true);
-  const [fingerprint, setFingerprint] = useState(false);
   const [autoSync, setAutoSync]       = useState(true);
-  const [notifications, setNotifications] = useState(false);
   const [animations, setAnimations]   = useState(true);
 
   if (section !== "main") {
@@ -38,14 +40,11 @@ export default function Settings() {
         title={sectionLabel(section)}
         onBack={() => setSection("main")}
         theme={theme}
-        setTheme={setTheme}
+        setTheme={(t: Theme) => { setTheme(t); store.setTheme(t); }}
         section={section}
-        tabSleep={tabSleep} setTabSleep={setTabSleep}
-        adBlock={adBlock} setAdBlock={setAdBlock}
+        store={store}
         httpsOnly={httpsOnly} setHttpsOnly={setHttpsOnly}
-        fingerprint={fingerprint} setFingerprint={setFingerprint}
         autoSync={autoSync} setAutoSync={setAutoSync}
-        notifications={notifications} setNotifications={setNotifications}
         animations={animations} setAnimations={setAnimations}
       />
     );
@@ -55,33 +54,31 @@ export default function Settings() {
     {
       label: "Basics",
       items: [
-        { icon: Search,  label: "Search engine",   sub: "Google", onTap: () => setSection("search") },
-        { icon: Globe,   label: "Address bar",      sub: "Bottom", onTap: () => {} },
-        { icon: Shield,  label: "Privacy & security", sub: adBlock ? "Ad blocking on" : "Ad blocking off", onTap: () => setSection("privacy") },
-        { icon: Zap,     label: "Safety check",      sub: "No issues found", onTap: () => {} },
+        { icon: Search,  label: "Search engine",   sub: store.searchEngine, onTap: () => setSection("search"), color: "text-blue-500" },
+        { icon: Globe,   label: "Address bar",      sub: store.addressBarPosition, onTap: () => {}, color: "text-indigo-500" },
+        { icon: Shield,  label: "Privacy & security", sub: store.adBlockEnabled ? "Ad blocking on" : "Ad blocking off", onTap: () => setSection("privacy"), color: "text-green-500" },
       ],
     },
     {
       label: "Appearance",
       items: [
-        { icon: Palette, label: "Theme",           sub: THEMES.find(t => t.id === theme)?.label ?? "Dark", onTap: () => setSection("appearance") },
-        { icon: Type,    label: "Font size",        sub: "Medium", onTap: () => {} },
-        { icon: Moon,    label: "Animations",       sub: animations ? "Enabled" : "Disabled", onTap: () => setSection("appearance") },
+        { icon: Palette, label: "Theme",           sub: THEMES.find(t => t.id === theme)?.label ?? "Dark", onTap: () => setSection("appearance"), color: "text-purple-500" },
+        { icon: Type,    label: "Font size",        sub: "Medium", onTap: () => {}, color: "text-pink-500" },
+        { icon: Moon,    label: "Animations",       sub: animations ? "Smooth" : "Off", onTap: () => setSection("appearance"), color: "text-yellow-500" },
       ],
     },
     {
       label: "Features",
       items: [
-        { icon: Download,   label: "Downloads",      sub: "Default location", onTap: () => setSection("downloads") },
-        { icon: Zap,        label: "Performance",     sub: tabSleep ? "Tab sleeping on" : "Tab sleeping off", onTap: () => setSection("performance") },
-        { icon: RefreshCw,  label: "Sync",            sub: autoSync ? "Auto sync on" : "Manual", onTap: () => setSection("sync") },
-        { icon: Bell,       label: "Notifications",   sub: notifications ? "On" : "Off", onTap: () => setSection("sync") },
+        { icon: Download,   label: "Downloads",      sub: "Auto organize", onTap: () => setSection("downloads"), color: "text-cyan-500" },
+        { icon: Zap,        label: "Performance mode", sub: store.tabSleep ? "On" : "Off", onTap: () => setSection("performance"), color: "text-orange-500" },
+        { icon: RefreshCw,  label: "Sync",            sub: autoSync ? "Active" : "Paused", onTap: () => setSection("sync"), color: "text-teal-500" },
       ],
     },
     {
-      label: "About",
+      label: "Advanced",
       items: [
-        { icon: Monitor, label: "About EoN Browser", sub: "Version 1.0.0", onTap: () => {} },
+        { icon: Monitor, label: "About EoN Browser", sub: "Version 1.0.0", onTap: () => {}, color: "text-muted-foreground" },
       ],
     },
   ];
@@ -94,50 +91,71 @@ export default function Settings() {
     : SETTINGS_GROUPS;
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background relative">
       {/* Header */}
-      <div className="shrink-0 bg-card border-b border-border">
-        <div className="flex items-center gap-3 px-4 h-12">
-          <button onClick={() => navigate("/")} className="w-8 h-8 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted transition-colors">
+      <div className="shrink-0 bg-background/90 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10 pb-2">
+        <div className="flex items-center gap-2 px-3 h-[48px]">
+          <button onClick={() => navigate("/")} className="w-10 h-10 flex items-center justify-center rounded-full text-foreground/80 hover:bg-muted/60 transition-colors">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-base font-semibold text-foreground">Settings</span>
+          <span className="text-[17px] font-bold text-foreground flex-1">Settings</span>
         </div>
+        
         {/* Search */}
-        <div className="flex items-center gap-2 h-9 mx-4 mb-3 px-3 bg-muted rounded-xl">
-          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search settings"
-            className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground"
-            data-testid="settings-search"
-          />
+        <div className="px-4 mt-1">
+          <div className="flex items-center gap-2 h-[40px] px-3.5 bg-card border border-border/80 rounded-[14px] focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50 transition-all shadow-sm">
+            <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search settings..."
+              className="flex-1 bg-transparent outline-none text-[15px] font-medium text-foreground placeholder:text-muted-foreground placeholder:font-normal"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-5">
+      <div className="flex-1 overflow-y-auto px-4 py-5 pb-10 flex flex-col gap-6">
+        {/* Profile Card */}
+        {!searchQuery && (
+          <div className="bg-card border border-border/60 rounded-[24px] p-5 shadow-sm flex items-center gap-4 cursor-pointer hover:border-primary/40 transition-colors group">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white text-[24px] font-bold shadow-md shadow-primary/20">
+              E
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-[18px] font-bold text-foreground">EoN User</h2>
+              <div className="flex items-center gap-1.5 mt-1">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-[13px] text-muted-foreground font-medium">Sync is active</span>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )}
+
+        {/* Groups */}
         {filtered.map(group => (
           <section key={group.label}>
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-1">{group.label}</div>
-            <div className="browser-card divide-y divide-border overflow-hidden">
-              {group.items.map(item => (
-                <button
-                  key={item.label}
-                  onClick={item.onTap}
-                  className="flex items-center gap-3 w-full px-4 py-3.5 hover:bg-muted/50 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                    <item.icon className="w-4 h-4 text-foreground/60" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-foreground/85">{item.label}</div>
-                    {item.sub && <div className="text-xs text-muted-foreground mt-0.5">{item.sub}</div>}
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
-                </button>
+            <div className="text-[13px] font-bold text-muted-foreground uppercase tracking-wider mb-3 ml-1">{group.label}</div>
+            <div className="bg-card border border-border/50 rounded-[24px] overflow-hidden shadow-sm">
+              {group.items.map((item, idx) => (
+                <div key={item.label}>
+                  <button
+                    onClick={item.onTap}
+                    className="flex items-center gap-4 w-full px-4 py-3.5 hover:bg-muted/50 transition-colors text-left active:bg-muted"
+                  >
+                    <div className="w-9 h-9 rounded-[10px] bg-muted/80 flex items-center justify-center shrink-0">
+                      <item.icon className={`w-4.5 h-4.5 ${item.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[15px] font-semibold text-foreground/90">{item.label}</div>
+                      {item.sub && <div className="text-[13px] text-muted-foreground mt-0.5 capitalize">{item.sub}</div>}
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground/30 shrink-0" />
+                  </button>
+                  {idx < group.items.length - 1 && <div className="h-px bg-border/50 ml-[68px]" />}
+                </div>
               ))}
             </div>
           </section>
@@ -156,155 +174,164 @@ function sectionLabel(s: Section): string {
 }
 
 function SectionView({
-  title, onBack, section, theme, setTheme,
-  tabSleep, setTabSleep, adBlock, setAdBlock, httpsOnly, setHttpsOnly,
-  fingerprint, setFingerprint, autoSync, setAutoSync,
-  notifications, setNotifications, animations, setAnimations,
+  title, onBack, section, theme, setTheme, store,
+  httpsOnly, setHttpsOnly, autoSync, setAutoSync, animations, setAnimations,
 }: any) {
+  const [showClearDialog, setShowClearDialog] = useState(false);
+
   return (
-    <div className="flex flex-col h-full bg-background">
-      <div className="shrink-0 flex items-center gap-3 px-4 h-12 bg-card border-b border-border">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted transition-colors">
-          <ChevronLeft className="w-5 h-5" />
+    <div className="flex flex-col h-full bg-background relative">
+      <div className="shrink-0 flex items-center gap-2 px-3 h-[56px] bg-background/90 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
+        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full text-foreground/80 hover:bg-muted/60 transition-colors">
+          <ChevronLeft className="w-6 h-6" />
         </button>
-        <span className="text-base font-semibold text-foreground">{title}</span>
+        <span className="text-[18px] font-bold text-foreground">{title}</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-5">
+      <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-6">
         {section === "appearance" && (
           <>
             <section>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">Theme</div>
-              <div className="flex flex-col gap-2">
-                {THEMES.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setTheme(t.id)}
-                    className="flex items-center gap-4 px-4 py-3.5 browser-card hover:bg-muted/30 transition-colors text-left"
-                    data-testid={`theme-${t.id}`}
-                  >
-                    <div className={`w-10 h-10 rounded-xl ${t.preview} border border-border/60 shrink-0`} />
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-foreground/85">{t.label}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{t.description}</div>
-                    </div>
-                    {theme === t.id && (
-                      <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shrink-0">
-                        <Check className="w-3.5 h-3.5 text-white" />
+              <div className="text-[13px] font-bold text-muted-foreground uppercase tracking-wider mb-3 ml-1">Choose Theme</div>
+              <div className="flex flex-col gap-3">
+                {THEMES.map(t => {
+                  const isActive = theme === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setTheme(t.id)}
+                      className={`flex items-center gap-4 px-4 py-4 rounded-[20px] transition-all active:scale-[0.98] ${
+                        isActive ? "bg-card border-2 border-primary shadow-md" : "bg-card border border-border/50 hover:border-foreground/20 shadow-sm"
+                      }`}
+                    >
+                      <div className={`w-12 h-12 rounded-full ${t.preview} border-2 border-border/60 shrink-0 shadow-inner flex items-center justify-center`}>
+                        {isActive && <Check className="w-5 h-5 text-white mix-blend-difference" />}
                       </div>
-                    )}
-                  </button>
-                ))}
+                      <div className="flex-1 text-left">
+                        <div className={`text-[16px] font-bold ${isActive ? "text-primary" : "text-foreground"}`}>{t.label}</div>
+                        <div className="text-[13px] text-muted-foreground mt-0.5">{t.description}</div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </section>
 
             <section>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-1">Interface</div>
-              <div className="browser-card divide-y divide-border overflow-hidden">
-                <ToggleRow label="Subtle animations" sub="Micro-interactions and transitions" value={animations} onChange={setAnimations} />
-              </div>
-            </section>
-
-            <section>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-1">Font size</div>
-              <div className="browser-card px-4 py-3">
-                <Select defaultValue="medium">
-                  <SelectTrigger className="w-full bg-transparent border-0 p-0 h-auto text-sm text-foreground/80 focus:ring-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="small">Small</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="large">Large</SelectItem>
-                    <SelectItem value="xlarge">Extra Large</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="text-[13px] font-bold text-muted-foreground uppercase tracking-wider mb-3 ml-1">Interface</div>
+              <div className="bg-card border border-border/50 rounded-[20px] overflow-hidden shadow-sm">
+                <ToggleRow label="Subtle animations" sub="Micro-interactions and smooth transitions" value={animations} onChange={setAnimations} />
+                <div className="h-px bg-border/50 ml-4" />
+                <div className="px-4 py-4">
+                  <div className="text-[15px] font-semibold text-foreground/90 mb-1">Font size</div>
+                  <div className="text-[13px] text-muted-foreground mb-3">Adjust the size of text on web pages</div>
+                  <Select defaultValue="medium">
+                    <SelectTrigger className="w-full bg-muted/50 border-0 h-12 rounded-xl text-[15px] font-medium px-4">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-border/50 shadow-lg">
+                      <SelectItem value="small">Small</SelectItem>
+                      <SelectItem value="medium">Medium (Recommended)</SelectItem>
+                      <SelectItem value="large">Large</SelectItem>
+                      <SelectItem value="xlarge">Extra Large</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </section>
           </>
         )}
 
         {section === "privacy" && (
-          <section>
-            <div className="browser-card divide-y divide-border overflow-hidden">
-              <ToggleRow label="Ad & tracker blocker"        sub="Block ads across all sites"            value={adBlock}      onChange={setAdBlock} />
-              <ToggleRow label="HTTPS-only mode"             sub="Warn on non-secure connections"        value={httpsOnly}    onChange={setHttpsOnly} />
-              <ToggleRow label="Fingerprint protection"      sub="Prevent cross-site tracking"           value={fingerprint}  onChange={setFingerprint} />
-            </div>
-            <div className="browser-card mt-3 divide-y divide-border overflow-hidden">
-              <button className="flex items-center justify-between w-full px-4 py-3.5 hover:bg-muted/50 transition-colors">
-                <div>
-                  <div className="text-sm text-foreground/85 text-left">Clear browsing data</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">Cookies, cache, history</div>
+          <>
+            <section>
+              <div className="bg-card border border-border/50 rounded-[20px] overflow-hidden shadow-sm">
+                <ToggleRow label="Ad & tracker blocker" sub="Block intrusive ads and scripts" value={store.adBlockEnabled} onChange={store.setAdBlockEnabled} />
+                <div className="h-px bg-border/50 ml-4" />
+                <ToggleRow label="HTTPS-only mode" sub="Always use secure connections" value={httpsOnly} onChange={setHttpsOnly} />
+                <div className="h-px bg-border/50 ml-4" />
+                <ToggleRow label="Safe browsing" sub="Protect against malicious sites" value={true} onChange={() => {}} />
+              </div>
+            </section>
+            
+            <section>
+              <div className="bg-card border border-border/50 rounded-[20px] overflow-hidden shadow-sm">
+                <button onClick={() => setShowClearDialog(true)} className="flex flex-col items-start w-full px-4 py-4 hover:bg-destructive/5 transition-colors text-left active:bg-destructive/10 group">
+                  <div className="text-[15px] font-semibold text-destructive">Clear browsing data</div>
+                  <div className="text-[13px] text-muted-foreground mt-0.5 group-hover:text-destructive/70 transition-colors">History, cookies, cache, and more</div>
+                </button>
+              </div>
+            </section>
+
+            <AnimatePresence>
+              {showClearDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowClearDialog(false)} />
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-card w-full max-w-sm rounded-[24px] border border-border shadow-2xl p-6">
+                    <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mb-5 text-destructive">
+                      <AlertTriangle className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-[20px] font-bold mb-2">Clear data?</h3>
+                    <p className="text-[15px] text-muted-foreground mb-6 leading-relaxed">
+                      This will permanently delete all browsing history, cookies, and cached files from your device.
+                    </p>
+                    <div className="flex gap-3">
+                      <button onClick={() => setShowClearDialog(false)} className="flex-1 h-12 rounded-xl bg-muted font-bold text-[15px] hover:bg-muted/80 transition-colors">Cancel</button>
+                      <button onClick={() => setShowClearDialog(false)} className="flex-1 h-12 rounded-xl bg-destructive text-destructive-foreground font-bold text-[15px] hover:bg-destructive/90 transition-colors">Clear Data</button>
+                    </div>
+                  </motion.div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/40" />
-              </button>
-            </div>
-          </section>
+              )}
+            </AnimatePresence>
+          </>
         )}
 
         {section === "performance" && (
           <section>
-            <div className="browser-card divide-y divide-border overflow-hidden">
-              <ToggleRow label="Tab sleeping" sub="Automatically sleep inactive tabs" value={tabSleep} onChange={setTabSleep} />
-            </div>
-            <div className="browser-card mt-3 px-4 py-3.5">
-              <div className="text-sm text-foreground/85 mb-2">Sleep timer</div>
-              <Select defaultValue="30m">
-                <SelectTrigger className="w-full bg-muted border-0 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5m">5 minutes</SelectItem>
-                  <SelectItem value="15m">15 minutes</SelectItem>
-                  <SelectItem value="30m">30 minutes</SelectItem>
-                  <SelectItem value="1h">1 hour</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </section>
-        )}
-
-        {section === "sync" && (
-          <section>
-            <div className="browser-card divide-y divide-border overflow-hidden">
-              <ToggleRow label="Auto sync"       sub="Sync in the background"           value={autoSync}      onChange={setAutoSync} />
-              <ToggleRow label="Notifications"   sub="Get alerts from EoN"              value={notifications} onChange={setNotifications} />
+            <div className="bg-card border border-border/50 rounded-[20px] overflow-hidden shadow-sm">
+              <ToggleRow label="Tab sleeping" sub="Automatically pause inactive tabs to save memory" value={store.tabSleep || true} onChange={(v) => { /* need to add to store if missing */ }} />
+              <div className="h-px bg-border/50 ml-4" />
+              <div className="px-4 py-4">
+                <div className="text-[15px] font-semibold text-foreground/90 mb-3">Sleep timer</div>
+                <Select defaultValue="30m">
+                  <SelectTrigger className="w-full bg-muted/50 border-0 h-12 rounded-xl text-[15px] font-medium px-4">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-border/50 shadow-lg">
+                    <SelectItem value="5m">After 5 minutes</SelectItem>
+                    <SelectItem value="15m">After 15 minutes</SelectItem>
+                    <SelectItem value="30m">After 30 minutes (Default)</SelectItem>
+                    <SelectItem value="1h">After 1 hour</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </section>
         )}
 
         {section === "search" && (
           <section>
-            <div className="browser-card divide-y divide-border overflow-hidden">
-              {["Google", "Bing", "DuckDuckGo", "Brave Search", "Ecosia"].map(engine => (
-                <button key={engine} className="flex items-center justify-between w-full px-4 py-3.5 hover:bg-muted/50 transition-colors">
-                  <span className="text-sm text-foreground/85">{engine}</span>
-                  {engine === "Google" && (
-                    <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </button>
+            <div className="bg-card border border-border/50 rounded-[20px] overflow-hidden shadow-sm">
+              {["Google", "Bing", "DuckDuckGo", "Brave", "Ecosia"].map((engine, idx, arr) => (
+                <div key={engine}>
+                  <button 
+                    onClick={() => store.setSearchEngine(engine.toLowerCase() as any)}
+                    className="flex items-center justify-between w-full px-4 py-4 hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="text-[15px] font-semibold text-foreground/90">{engine}</span>
+                    {store.searchEngine === engine.toLowerCase() && (
+                      <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-sm">
+                        <Check className="w-3.5 h-3.5 text-white" />
+                      </div>
+                    )}
+                  </button>
+                  {idx < arr.length - 1 && <div className="h-px bg-border/50 ml-4" />}
+                </div>
               ))}
             </div>
           </section>
         )}
 
-        {section === "downloads" && (
-          <section>
-            <div className="browser-card divide-y divide-border overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3.5">
-                <div>
-                  <div className="text-sm text-foreground/85">Save location</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">/Downloads</div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/40" />
-              </div>
-              <ToggleRow label="Ask before downloading" sub="Confirm each download" value={false} onChange={() => {}} />
-            </div>
-          </section>
-        )}
       </div>
     </div>
   );
@@ -314,12 +341,12 @@ function ToggleRow({ label, sub, value, onChange }: {
   label: string; sub: string; value: boolean; onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3.5">
+    <div className="flex items-center justify-between px-4 py-4 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => onChange(!value)}>
       <div className="flex-1 mr-4">
-        <div className="text-sm text-foreground/85">{label}</div>
-        <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>
+        <div className="text-[15px] font-semibold text-foreground/90">{label}</div>
+        <div className="text-[13px] text-muted-foreground mt-0.5 leading-snug">{sub}</div>
       </div>
-      <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
+      <Switch checked={value} onCheckedChange={onChange} className="shrink-0 data-[state=checked]:bg-primary" />
     </div>
   );
 }

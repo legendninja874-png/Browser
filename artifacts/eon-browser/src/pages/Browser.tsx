@@ -1,42 +1,47 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
-  useListTabs, useCreateTab, useUpdateTab, useCloseTab,
+  useListTabs, useUpdateTab, useCloseTab, useAddHistoryEntry,
   getListTabsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowLeft, ArrowRight, RotateCw, X, Plus, Globe,
-  Shield, Search, MoreVertical, Home,
-} from "lucide-react";
-import { motion } from "framer-motion";
+import { X, Shield, Search, Lock, MoreVertical } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 function getDomain(url: string) {
   if (!url || url === "about:newtab") return null;
   try { return new URL(url).hostname.replace("www.", ""); } catch { return url; }
 }
 
+function getFavicon(url: string) {
+  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`; } catch { return null; }
+}
+
 export default function Browser() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
-  const { data: tabs, isLoading } = useListTabs();
-  const createTab  = useCreateTab();
-  const updateTab  = useUpdateTab();
-  const closeTab   = useCloseTab();
+  const { data: tabs } = useListTabs();
+  const updateTab = useUpdateTab();
+  const closeTab = useCloseTab();
+  const addHistory = useAddHistoryEntry();
 
   const [urlValue, setUrlValue] = useState("");
   const [urlFocused, setUrlFocused] = useState(false);
-  const [loadProgress, setLoadProgress] = useState(0);
   const [isLoading2, setIsLoading2] = useState(false);
+  const [progress, setProgress] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeTab = tabs?.find(t => t.isActive);
-  const tabCount  = tabs?.length ?? 0;
+
+  useEffect(() => {
+    if (activeTab && activeTab.url !== "about:newtab") {
+      setUrlValue(activeTab.url);
+    } else {
+      setUrlValue("");
+    }
+  }, [activeTab]);
 
   const invalidateTabs = () => queryClient.invalidateQueries({ queryKey: getListTabsQueryKey() });
-
-  const handleNewTab = () =>
-    createTab.mutate({ data: { url: "about:newtab", title: "New Tab" } }, { onSuccess: invalidateTabs });
 
   const handleActivate = (id: number) => {
     if (activeTab?.id === id) return;
@@ -50,182 +55,202 @@ export default function Browser() {
 
   const handleNavigate = () => {
     const url = urlValue.trim();
-    if (!url) return;
+    if (!url || !activeTab) return;
+    
+    let finalUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      finalUrl = url.includes('.') && !url.includes(' ') ? `https://${url}` : `https://google.com/search?q=${encodeURIComponent(url)}`;
+    }
+
     setUrlFocused(false);
-    setIsLoading2(true);
-    setLoadProgress(30);
-    setTimeout(() => setLoadProgress(70), 400);
-    setTimeout(() => { setLoadProgress(100); setTimeout(() => { setIsLoading2(false); setLoadProgress(0); }, 300); }, 900);
     inputRef.current?.blur();
+    
+    // Simulate loading
+    setIsLoading2(true);
+    setProgress(10);
+    const interval = setInterval(() => setProgress(p => p + (100 - p) * 0.2), 100);
+    
+    updateTab.mutate(
+      { id: activeTab.id, data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } },
+      { 
+        onSuccess: () => {
+          invalidateTabs();
+          addHistory.mutate({ data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } });
+          setTimeout(() => {
+            clearInterval(interval);
+            setProgress(100);
+            setTimeout(() => { setIsLoading2(false); setProgress(0); }, 300);
+          }, 600);
+        }
+      }
+    );
   };
 
-  const displayUrl = urlFocused
-    ? urlValue
-    : (activeTab?.url && activeTab.url !== "about:newtab" ? activeTab.url : "");
-
+  const displayUrl = urlFocused ? urlValue : (activeTab?.url && activeTab.url !== "about:newtab" ? activeTab.url : "");
   const domain = activeTab ? getDomain(activeTab.url ?? "") : null;
+  const isSecure = activeTab?.url?.startsWith("https://");
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      {/* Top bar */}
-      <div className="shrink-0 bg-card border-b border-border">
-        {/* Navigation row */}
-        <div className="flex items-center gap-1 px-2 h-11">
-          <button
-            onClick={() => navigate("/")}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Home className="w-4.5 h-4.5" />
-          </button>
+    <div className="flex flex-col h-full bg-background relative">
+      
+      {/* Top compact tab strip (Chrome style) */}
+      {tabs && tabs.length > 1 && (
+        <div className="shrink-0 bg-background flex items-end px-1 pt-1 h-[38px] overflow-x-auto no-scrollbar border-b border-border/50">
+          {tabs.map(tab => (
+            <div
+              key={tab.id}
+              onClick={() => handleActivate(tab.id)}
+              className={`relative flex items-center gap-2 min-w-[120px] max-w-[200px] h-[34px] px-3 rounded-t-xl shrink-0 cursor-pointer select-none transition-colors border-t border-x border-transparent
+                ${tab.isActive 
+                  ? "bg-card border-border/80 text-foreground z-10 shadow-[0_-2px_8px_rgba(0,0,0,0.05)]" 
+                  : "bg-transparent text-muted-foreground hover:bg-muted/50 border-transparent z-0"}`}
+            >
+              <img src={getFavicon(tab.url || "") || ""} className="w-3.5 h-3.5 shrink-0" alt="" onError={e => (e.currentTarget.style.display = "none")} />
+              <span className="text-[12px] font-medium truncate flex-1 leading-none">{tab.title || getDomain(tab.url ?? "") || "New Tab"}</span>
+              <button
+                onClick={e => handleClose(tab.id, e)}
+                className={`w-5 h-5 flex items-center justify-center rounded-full hover:bg-muted transition-all shrink-0 ${tab.isActive ? "opacity-100" : "opacity-0 hover:opacity-100"}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+              {tab.isActive && (
+                <>
+                  <div className="absolute -bottom-px -left-2 w-2 h-2 rounded-br-lg shadow-[2px_2px_0_2px_var(--color-card)]" />
+                  <div className="absolute -bottom-px -right-2 w-2 h-2 rounded-bl-lg shadow-[-2px_2px_0_2px_var(--color-card)]" />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
-          {/* URL bar */}
-          <div className="flex-1 flex items-center gap-2 h-8 bg-muted rounded-xl px-3 overflow-hidden">
-            {domain
-              ? <Shield className="w-3.5 h-3.5 text-green-500 shrink-0" />
-              : <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            }
+      {/* Top Address Bar (Visible when in Browser mode) */}
+      <div className={`shrink-0 bg-card border-b border-border z-30 transition-all ${urlFocused ? "absolute inset-0 h-full flex flex-col bg-background/95 backdrop-blur" : "relative"}`}>
+        <div className="flex items-center gap-2 px-2 h-14">
+          <div className={`flex-1 flex items-center gap-2 bg-muted/60 border border-border/50 rounded-full px-4 transition-all ${urlFocused ? "h-12 shadow-sm bg-card border-primary/50" : "h-11"}`}>
+            {urlFocused ? (
+              <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+            ) : domain ? (
+              isSecure ? <Shield className="w-4 h-4 text-green-500 shrink-0" /> : <ShieldAlert className="w-4 h-4 text-yellow-500 shrink-0" />
+            ) : (
+              <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+            )}
+            
             <input
               ref={inputRef}
               type="text"
               value={displayUrl}
               onChange={e => setUrlValue(e.target.value)}
-              onFocus={() => { setUrlFocused(true); setUrlValue(activeTab?.url ?? ""); }}
-              onBlur={() => setUrlFocused(false)}
+              onFocus={() => { setUrlFocused(true); setUrlValue(activeTab?.url === "about:newtab" ? "" : (activeTab?.url ?? "")); }}
+              onBlur={() => setTimeout(() => setUrlFocused(false), 150)}
               onKeyDown={e => { if (e.key === "Enter") handleNavigate(); }}
-              placeholder="Search or type URL"
-              className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground min-w-0 font-mono text-xs"
-              data-testid="url-bar"
+              placeholder="Search or type web address"
+              className="flex-1 bg-transparent outline-none text-[15px] font-medium text-foreground placeholder:text-muted-foreground min-w-0"
+              autoComplete="off"
+              autoCorrect="off"
             />
+            
             {urlFocused && urlValue && (
-              <button onClick={() => setUrlValue("")} className="shrink-0 text-muted-foreground hover:text-foreground">
+              <button onClick={() => setUrlValue("")} className="w-6 h-6 flex items-center justify-center rounded-full bg-muted text-foreground">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-
-          {/* New tab + count + more */}
-          <button
-            onClick={handleNewTab}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            data-testid="btn-new-tab"
-          >
-            <Plus className="w-4.5 h-4.5" />
-          </button>
-          <button
-            onClick={() => navigate("/tabs")}
-            className="relative w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-xs font-semibold"
-            data-testid="btn-tab-count"
-          >
-            <div className="w-5 h-5 border-2 border-current rounded-sm flex items-center justify-center text-[9px] font-bold">
-              {tabCount > 99 ? ":" : tabCount}
-            </div>
-          </button>
-          <button className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-            <MoreVertical className="w-4.5 h-4.5" />
-          </button>
+          
+          {!urlFocused && (
+            <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground">
+              <MoreVertical className="w-5 h-5" />
+            </button>
+          )}
+          {urlFocused && (
+            <button onClick={() => setUrlFocused(false)} className="px-2 text-[15px] font-medium text-primary">
+              Cancel
+            </button>
+          )}
         </div>
 
-        {/* Progress bar */}
-        {isLoading2 && (
-          <motion.div
-            className="h-0.5 bg-primary"
-            initial={{ width: "0%" }}
-            animate={{ width: `${loadProgress}%` }}
-            transition={{ ease: "easeOut", duration: 0.4 }}
-          />
-        )}
-
-        {/* Browser nav controls */}
-        <div className="flex items-center gap-0.5 px-3 py-1.5 border-t border-border/50">
-          <NavBtn icon={ArrowLeft}  disabled />
-          <NavBtn icon={ArrowRight} disabled />
-          <NavBtn icon={RotateCw} onClick={() => {
-            setIsLoading2(true);
-            setLoadProgress(40);
-            setTimeout(() => { setLoadProgress(100); setTimeout(() => { setIsLoading2(false); setLoadProgress(0); }, 300); }, 700);
-          }} />
+        {/* Loading Progress Bar */}
+        <div className="h-0.5 w-full bg-transparent overflow-hidden">
+          {isLoading2 && (
+            <motion.div
+              className="h-full bg-primary"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ ease: "easeOut", duration: 0.2 }}
+            />
+          )}
         </div>
+
+        {/* Search Suggestions Panel */}
+        <AnimatePresence>
+          {urlFocused && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="flex-1 bg-card overflow-y-auto"
+            >
+              <div className="flex flex-col">
+                <div className="px-4 py-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase border-b border-border/50">
+                  Trending searches
+                </div>
+                {["weather today", "latest ai news", "how to build react app", "top movies 2025"].map((term, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setUrlValue(term); setTimeout(handleNavigate, 50); }}
+                    className="flex items-center gap-4 px-4 py-3.5 hover:bg-muted/50 border-b border-border/50 text-left transition-colors"
+                  >
+                    <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="text-[15px] text-foreground font-medium flex-1">{term}</span>
+                    <div className="w-6 h-6 flex items-center justify-center rounded bg-muted/50 text-[10px] text-muted-foreground font-mono">
+                      ↖
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Tab strip (compact horizontal scroll) */}
-      {tabs && tabs.length > 1 && (
-        <div className="shrink-0 bg-card/60 border-b border-border flex items-center gap-1 px-2 py-1.5 overflow-x-auto">
-          {tabs.slice(0, 8).map(tab => (
-            <div
-              key={tab.id}
-              onClick={() => handleActivate(tab.id)}
-              role="tab"
-              className={`relative flex items-center gap-1.5 min-w-0 max-w-[140px] h-7 px-2.5 rounded-lg text-left transition-colors group shrink-0 cursor-pointer select-none
-                ${tab.isActive ? "bg-primary/15 border border-primary/25 text-foreground" : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-              data-testid={`tab-strip-${tab.id}`}
-            >
-              {tab.favicon
-                ? <img src={tab.favicon} alt="" className="w-3.5 h-3.5 shrink-0" />
-                : <Globe className="w-3.5 h-3.5 shrink-0" />
-              }
-              <span className="text-[11px] truncate flex-1">{tab.title || getDomain(tab.url ?? "") || "New Tab"}</span>
-              <button
-                onClick={e => handleClose(tab.id, e)}
-                className="w-4 h-4 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted transition-all shrink-0"
-              >
-                <X className="w-2.5 h-2.5" />
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={handleNewTab}
-            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Webview area */}
-      <div className="flex-1 relative overflow-hidden">
+      {/* Webview Content Area */}
+      <div className="flex-1 relative bg-background">
         {!activeTab || activeTab.url === "about:newtab" ? (
-          <div className="absolute inset-0 bg-background flex flex-col items-center justify-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-card border border-border flex items-center justify-center shadow-sm">
-              <span className="text-2xl font-light text-foreground/60">E</span>
-            </div>
-            <div className="text-center">
-              <div className="text-base font-medium text-foreground/60 mb-1">New Tab</div>
-              <div className="text-sm text-muted-foreground">Start typing to search or navigate</div>
-            </div>
+          // New Tab / Empty State
+          <div className="absolute inset-0 flex flex-col items-center justify-center pb-20">
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground/80 mb-6">EoN</h1>
+            <button onClick={() => inputRef.current?.focus()} className="flex items-center gap-3 px-5 py-3.5 bg-card border border-border rounded-full shadow-sm text-muted-foreground font-medium text-[15px] w-64 justify-center hover:bg-muted/50 transition-colors">
+              <Search className="w-4 h-4" /> Search the web
+            </button>
           </div>
         ) : (
-          <div className="absolute inset-0 bg-[#f8f9fa] flex flex-col items-center justify-center gap-3">
-            {isLoading2 && (
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-muted overflow-hidden">
-                <motion.div
-                  className="h-full bg-primary"
-                  animate={{ x: ["-100%", "100%"] }}
-                  transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                />
+          // Simulated Webview Container
+          <div className="absolute inset-0 bg-[#ffffff] dark:bg-[#121212] overflow-y-auto no-scrollbar">
+            {isLoading2 ? (
+              <div className="w-full h-full flex flex-col pt-12 px-6">
+                <Skeleton className="h-8 w-3/4 bg-gray-200 dark:bg-gray-800 rounded-md mb-6" />
+                <Skeleton className="h-4 w-full bg-gray-200 dark:bg-gray-800 rounded-sm mb-3" />
+                <Skeleton className="h-4 w-full bg-gray-200 dark:bg-gray-800 rounded-sm mb-3" />
+                <Skeleton className="h-4 w-5/6 bg-gray-200 dark:bg-gray-800 rounded-sm mb-8" />
+                
+                <Skeleton className="h-48 w-full bg-gray-200 dark:bg-gray-800 rounded-xl mb-6" />
+              </div>
+            ) : (
+              <div className="w-full min-h-full flex flex-col items-center justify-center text-center p-6 pb-20 opacity-0 animate-in fade-in duration-500">
+                <img src={getFavicon(activeTab.url || "") || ""} className="w-16 h-16 rounded-2xl mb-6 shadow-md" alt="" onError={e => (e.currentTarget.style.display = "none")} />
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{domain}</h2>
+                <p className="text-[15px] text-gray-500 dark:text-gray-400 max-w-[280px] mb-8">
+                  This is a simulated webview for {activeTab.url}. In a real browser, the native rendering engine would display the site content here.
+                </p>
+                <div className="flex items-center justify-center gap-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-[13px] font-medium">
+                  <Lock className="w-3.5 h-3.5" />
+                  Connection is secure
+                </div>
               </div>
             )}
-            <Globe className="w-10 h-10 text-gray-300" />
-            <div className="text-center">
-              <div className="text-sm font-medium text-gray-500">{domain ?? activeTab.url}</div>
-              <div className="text-xs text-gray-400 mt-1">Simulated webview</div>
-            </div>
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-function NavBtn({ icon: Icon, disabled, onClick }: {
-  icon: React.ElementType; disabled?: boolean; onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="w-9 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-default"
-    >
-      <Icon className="w-4 h-4" />
-    </button>
   );
 }
