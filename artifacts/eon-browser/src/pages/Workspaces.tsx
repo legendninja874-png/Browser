@@ -1,16 +1,18 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import {
   useListWorkspaces, useCreateWorkspace, useUpdateWorkspace, useDeleteWorkspace,
   getListWorkspacesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, LayoutGrid, Trash2, Check } from "lucide-react";
+import { ChevronLeft, Plus, Check, Trash2, LayoutGrid } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const PRESET_COLORS = ["#00d4ff", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#6366f1", "#14b8a6"];
+const COLORS = ["#4285f4", "#34a853", "#fbbc04", "#ea4335", "#a855f7", "#ec4899", "#14b8a6", "#f59e0b"];
 
 export default function Workspaces() {
-  const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+  const queryClient  = useQueryClient();
   const { data: workspaces, isLoading } = useListWorkspaces();
   const createWorkspace = useCreateWorkspace();
   const updateWorkspace = useUpdateWorkspace();
@@ -18,7 +20,7 @@ export default function Workspaces() {
 
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName]       = useState("");
-  const [newColor, setNewColor]     = useState(PRESET_COLORS[0]);
+  const [newColor, setNewColor]     = useState(COLORS[0]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListWorkspacesQueryKey() });
 
@@ -38,28 +40,24 @@ export default function Workspaces() {
   };
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-6 py-5 flex flex-col gap-4">
+    <div className="flex flex-col h-full bg-background">
+      <div className="shrink-0 bg-card border-b border-border flex items-center gap-3 px-4 h-12">
+        <button onClick={() => navigate("/")} className="w-8 h-8 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted transition-colors">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <span className="text-base font-semibold flex-1">Workspaces</span>
+        <button
+          onClick={() => setIsCreating(!isCreating)}
+          className="w-8 h-8 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted transition-colors"
+          data-testid="btn-new-workspace"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
+      </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-white/75">Workspaces</div>
-            <div className="text-[11px] text-white/30 mt-0.5">Organize tabs by context</div>
-          </div>
-          <button
-            onClick={() => setIsCreating(!isCreating)}
-            className="flex items-center gap-1.5 h-7 px-3 rounded text-[12px] text-primary/70 hover:text-primary border border-primary/20 hover:border-primary/40 hover:bg-primary/8 transition-colors"
-            data-testid="btn-new-workspace"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New workspace
-          </button>
-        </div>
-
-        {/* Create form */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         {isCreating && (
-          <div className="rounded-lg border border-white/10 bg-white/4 p-4 flex flex-col gap-3">
+          <div className="browser-card p-4 flex flex-col gap-3">
             <input
               type="text"
               value={newName}
@@ -67,93 +65,71 @@ export default function Workspaces() {
               onKeyDown={e => e.key === "Enter" && handleCreate()}
               placeholder="Workspace name"
               autoFocus
-              className="h-8 bg-white/6 border border-white/10 rounded px-2.5 text-sm text-white/75 placeholder:text-white/25 outline-none focus:border-white/25 transition-colors"
+              className="h-10 bg-muted rounded-xl px-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary/50 transition-all"
               data-testid="input-workspace-name"
             />
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-white/35">Color</span>
-              <div className="flex gap-1.5">
-                {PRESET_COLORS.map(c => (
+              <span className="text-xs text-muted-foreground shrink-0">Color</span>
+              <div className="flex gap-2 flex-wrap">
+                {COLORS.map(c => (
                   <button
                     key={c}
                     onClick={() => setNewColor(c)}
-                    className={`w-5 h-5 rounded-full transition-transform ${newColor === c ? "scale-125 ring-2 ring-white/40 ring-offset-1 ring-offset-background" : "hover:scale-110"}`}
+                    className={`w-7 h-7 rounded-full transition-transform ${newColor === c ? "scale-125 ring-2 ring-offset-2 ring-offset-background ring-white/40" : "hover:scale-110"}`}
                     style={{ backgroundColor: c }}
                   />
                 ))}
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsCreating(false)}
-                className="h-7 px-3 rounded text-[12px] text-white/35 hover:text-white/55 hover:bg-white/6 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreate}
-                disabled={!newName.trim() || createWorkspace.isPending}
-                className="h-7 px-3 rounded text-[12px] bg-primary/80 hover:bg-primary text-black font-medium transition-colors disabled:opacity-40"
-              >
-                Create
-              </button>
+            <div className="flex gap-2">
+              <button onClick={() => setIsCreating(false)} className="flex-1 h-10 rounded-xl bg-muted text-sm text-foreground/70 hover:bg-muted/80 transition-colors">Cancel</button>
+              <button onClick={handleCreate} disabled={!newName.trim()} className="flex-1 h-10 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40">Create</button>
             </div>
           </div>
         )}
 
-        {/* Workspace list */}
-        {isLoading
-          ? <div className="space-y-1">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-14 w-full bg-white/5" />)}</div>
-          : workspaces?.length === 0
-            ? <div className="py-10 text-center text-sm text-white/25">No workspaces yet</div>
-            : (
-              <div className="rounded-lg border border-white/8 bg-white/3 divide-y divide-white/5 overflow-hidden">
-                {workspaces?.map(ws => (
-                  <div
-                    key={ws.id}
-                    onClick={() => handleSetActive(ws.id)}
-                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer group transition-colors hover:bg-white/4
-                      ${ws.isActive ? "bg-white/5" : ""}
-                    `}
-                    data-testid={`workspace-${ws.id}`}
-                  >
-                    {/* Color bar */}
-                    <div className="w-1 h-7 rounded-full shrink-0" style={{ backgroundColor: ws.color }} />
-
-                    {/* Icon */}
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center border border-white/8 shrink-0" style={{ borderColor: `${ws.color}30` }}>
-                      <LayoutGrid className="w-3.5 h-3.5" style={{ color: ws.color }} />
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[13px] font-medium ${ws.isActive ? "text-white/85" : "text-white/55"}`}>{ws.name}</span>
-                        {ws.isActive && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full border text-[10px]" style={{ color: ws.color, borderColor: `${ws.color}40`, backgroundColor: `${ws.color}12` }}>
-                            active
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-white/25 mt-0.5">{ws.tabCount} tabs</div>
-                    </div>
-
-                    {/* Controls */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      {ws.isActive && <Check className="w-3.5 h-3.5" style={{ color: ws.color }} />}
-                      <button
-                        onClick={e => handleDelete(ws.id, e)}
-                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-500/15 text-white/20 hover:text-red-400 transition-colors"
-                        data-testid={`delete-workspace-${ws.id}`}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
+        {isLoading ? (
+          Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)
+        ) : workspaces?.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 gap-3">
+            <LayoutGrid className="w-10 h-10 text-muted-foreground/30" />
+            <div className="text-sm text-muted-foreground">No workspaces yet</div>
+          </div>
+        ) : (
+          <div className="browser-card divide-y divide-border overflow-hidden">
+            {workspaces?.map(ws => (
+              <div
+                key={ws.id}
+                onClick={() => handleSetActive(ws.id)}
+                className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-muted/40 transition-colors group"
+                data-testid={`workspace-${ws.id}`}
+              >
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${ws.color}22` }}>
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: ws.color }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground/85">{ws.name}</span>
+                    {ws.isActive && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-medium">Active</span>
+                    )}
                   </div>
-                ))}
+                  <div className="text-xs text-muted-foreground mt-0.5">{ws.tabCount} tabs</div>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  {ws.isActive && <Check className="w-4 h-4 text-primary" />}
+                  <button
+                    onClick={e => handleDelete(ws.id, e)}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors"
+                    data-testid={`delete-workspace-${ws.id}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            )
-        }
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

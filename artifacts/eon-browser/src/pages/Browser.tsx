@@ -1,189 +1,231 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { useLocation } from "wouter";
 import {
   useListTabs, useCreateTab, useUpdateTab, useCloseTab,
   getListTabsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, ArrowRight, RotateCw, Home, Plus, X,
-  Moon, Pin, Globe, Shield, Search,
+  ArrowLeft, ArrowRight, RotateCw, X, Plus, Globe,
+  Shield, Search, MoreVertical, Home,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { motion } from "framer-motion";
+
+function getDomain(url: string) {
+  if (!url || url === "about:newtab") return null;
+  try { return new URL(url).hostname.replace("www.", ""); } catch { return url; }
+}
 
 export default function Browser() {
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { data: tabs, isLoading } = useListTabs();
-  const createTab   = useCreateTab();
-  const updateTab   = useUpdateTab();
-  const closeTab    = useCloseTab();
+  const createTab  = useCreateTab();
+  const updateTab  = useUpdateTab();
+  const closeTab   = useCloseTab();
 
-  const [urlInput, setUrlInput] = useState("");
+  const [urlValue, setUrlValue] = useState("");
+  const [urlFocused, setUrlFocused] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [isLoading2, setIsLoading2] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const activeTab = tabs?.find(t => t.isActive);
+  const tabCount  = tabs?.length ?? 0;
 
   const invalidateTabs = () => queryClient.invalidateQueries({ queryKey: getListTabsQueryKey() });
 
   const handleNewTab = () =>
     createTab.mutate({ data: { url: "about:newtab", title: "New Tab" } }, { onSuccess: invalidateTabs });
 
-  const handleClose = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    closeTab.mutate({ id }, { onSuccess: invalidateTabs });
-  };
-
   const handleActivate = (id: number) => {
     if (activeTab?.id === id) return;
     updateTab.mutate({ id, data: { isActive: true } }, { onSuccess: invalidateTabs });
   };
 
-  const handleSleep = (id: number, sleeping: boolean, e: React.MouseEvent) => {
+  const handleClose = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    updateTab.mutate({ id, data: { isSleeping: !sleeping } }, { onSuccess: invalidateTabs });
+    closeTab.mutate({ id }, { onSuccess: invalidateTabs });
   };
 
-  return (
-    <div className="flex h-full bg-background">
-      {/* Vertical Tab Sidebar — Arc-style */}
-      <div className="w-[220px] flex flex-col border-r border-white/8 bg-sidebar shrink-0">
+  const handleNavigate = () => {
+    const url = urlValue.trim();
+    if (!url) return;
+    setUrlFocused(false);
+    setIsLoading2(true);
+    setLoadProgress(30);
+    setTimeout(() => setLoadProgress(70), 400);
+    setTimeout(() => { setLoadProgress(100); setTimeout(() => { setIsLoading2(false); setLoadProgress(0); }, 300); }, 900);
+    inputRef.current?.blur();
+  };
 
-        {/* Toolbar row */}
-        <div className="flex items-center justify-between px-2 h-9 border-b border-white/8">
-          <span className="text-[11px] font-medium text-white/40 uppercase tracking-widest">Tabs</span>
+  const displayUrl = urlFocused
+    ? urlValue
+    : (activeTab?.url && activeTab.url !== "about:newtab" ? activeTab.url : "");
+
+  const domain = activeTab ? getDomain(activeTab.url ?? "") : null;
+
+  return (
+    <div className="flex flex-col h-full bg-background">
+      {/* Top bar */}
+      <div className="shrink-0 bg-card border-b border-border">
+        {/* Navigation row */}
+        <div className="flex items-center gap-1 px-2 h-11">
+          <button
+            onClick={() => navigate("/")}
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <Home className="w-4.5 h-4.5" />
+          </button>
+
+          {/* URL bar */}
+          <div className="flex-1 flex items-center gap-2 h-8 bg-muted rounded-xl px-3 overflow-hidden">
+            {domain
+              ? <Shield className="w-3.5 h-3.5 text-green-500 shrink-0" />
+              : <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            }
+            <input
+              ref={inputRef}
+              type="text"
+              value={displayUrl}
+              onChange={e => setUrlValue(e.target.value)}
+              onFocus={() => { setUrlFocused(true); setUrlValue(activeTab?.url ?? ""); }}
+              onBlur={() => setUrlFocused(false)}
+              onKeyDown={e => { if (e.key === "Enter") handleNavigate(); }}
+              placeholder="Search or type URL"
+              className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground min-w-0 font-mono text-xs"
+              data-testid="url-bar"
+            />
+            {urlFocused && urlValue && (
+              <button onClick={() => setUrlValue("")} className="shrink-0 text-muted-foreground hover:text-foreground">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* New tab + count + more */}
           <button
             onClick={handleNewTab}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             data-testid="btn-new-tab"
+          >
+            <Plus className="w-4.5 h-4.5" />
+          </button>
+          <button
+            onClick={() => navigate("/tabs")}
+            className="relative w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-xs font-semibold"
+            data-testid="btn-tab-count"
+          >
+            <div className="w-5 h-5 border-2 border-current rounded-sm flex items-center justify-center text-[9px] font-bold">
+              {tabCount > 99 ? ":" : tabCount}
+            </div>
+          </button>
+          <button className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+            <MoreVertical className="w-4.5 h-4.5" />
+          </button>
+        </div>
+
+        {/* Progress bar */}
+        {isLoading2 && (
+          <motion.div
+            className="h-0.5 bg-primary"
+            initial={{ width: "0%" }}
+            animate={{ width: `${loadProgress}%` }}
+            transition={{ ease: "easeOut", duration: 0.4 }}
+          />
+        )}
+
+        {/* Browser nav controls */}
+        <div className="flex items-center gap-0.5 px-3 py-1.5 border-t border-border/50">
+          <NavBtn icon={ArrowLeft}  disabled />
+          <NavBtn icon={ArrowRight} disabled />
+          <NavBtn icon={RotateCw} onClick={() => {
+            setIsLoading2(true);
+            setLoadProgress(40);
+            setTimeout(() => { setLoadProgress(100); setTimeout(() => { setIsLoading2(false); setLoadProgress(0); }, 300); }, 700);
+          }} />
+        </div>
+      </div>
+
+      {/* Tab strip (compact horizontal scroll) */}
+      {tabs && tabs.length > 1 && (
+        <div className="shrink-0 bg-card/60 border-b border-border flex items-center gap-1 px-2 py-1.5 overflow-x-auto">
+          {tabs.slice(0, 8).map(tab => (
+            <div
+              key={tab.id}
+              onClick={() => handleActivate(tab.id)}
+              role="tab"
+              className={`relative flex items-center gap-1.5 min-w-0 max-w-[140px] h-7 px-2.5 rounded-lg text-left transition-colors group shrink-0 cursor-pointer select-none
+                ${tab.isActive ? "bg-primary/15 border border-primary/25 text-foreground" : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+              data-testid={`tab-strip-${tab.id}`}
+            >
+              {tab.favicon
+                ? <img src={tab.favicon} alt="" className="w-3.5 h-3.5 shrink-0" />
+                : <Globe className="w-3.5 h-3.5 shrink-0" />
+              }
+              <span className="text-[11px] truncate flex-1">{tab.title || getDomain(tab.url ?? "") || "New Tab"}</span>
+              <button
+                onClick={e => handleClose(tab.id, e)}
+                className="w-4 h-4 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted transition-all shrink-0"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={handleNewTab}
+            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
+      )}
 
-        {/* Tab list */}
-        <ScrollArea className="flex-1">
-          <div className="py-1 px-1.5 flex flex-col gap-px">
-            {isLoading
-              ? Array(6).fill(0).map((_, i) => <Skeleton key={i} className="h-7 w-full rounded bg-white/5" />)
-              : tabs?.length === 0
-                ? <div className="px-3 py-4 text-xs text-white/30">No open tabs</div>
-                : tabs?.map(tab => (
-                  <div
-                    key={tab.id}
-                    onClick={() => handleActivate(tab.id)}
-                    className={`group flex items-center gap-2 h-7 px-2 rounded cursor-pointer transition-colors
-                      ${tab.isActive
-                        ? "bg-white/10 border-l-2 border-primary pl-[6px]"
-                        : "hover:bg-white/6 border-l-2 border-transparent pl-[6px]"}
-                      ${tab.isSleeping ? "opacity-40" : ""}
-                    `}
-                    data-testid={`tab-${tab.id}`}
-                  >
-                    {/* Favicon */}
-                    <div className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
-                      {tab.favicon
-                        ? <img src={tab.favicon} alt="" className="w-3 h-3" />
-                        : <Globe className="w-3 h-3 text-white/30" />
-                      }
-                    </div>
-
-                    {/* Group color dot */}
-                    {tab.groupColor && (
-                      <div
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: tab.groupColor }}
-                      />
-                    )}
-
-                    {/* Title */}
-                    <span className={`flex-1 text-[12px] truncate min-w-0 ${tab.isActive ? "text-white" : "text-white/50"}`}>
-                      {tab.title || tab.url}
-                    </span>
-
-                    {/* Hover controls */}
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      {tab.isSleeping && <Moon className="w-2.5 h-2.5 text-white/30" />}
-                      {tab.isPinned && <Pin className="w-2.5 h-2.5 text-primary/60" />}
-                      <button
-                        onClick={e => handleSleep(tab.id, tab.isSleeping, e)}
-                        className="w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 text-white/30 hover:text-white/60"
-                        title={tab.isSleeping ? "Wake" : "Sleep"}
-                      >
-                        <Moon className="w-2.5 h-2.5" />
-                      </button>
-                      <button
-                        onClick={e => handleClose(tab.id, e)}
-                        className="w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 text-white/30 hover:text-white/80"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-            }
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-
-        {/* URL / Navigation bar — slim */}
-        <div className="flex items-center gap-1.5 h-9 px-3 border-b border-white/8 bg-background/95 shrink-0">
-          <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/8 text-white/30 hover:text-white/70 transition-colors">
-            <ArrowLeft className="w-3.5 h-3.5" />
-          </button>
-          <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/8 text-white/20 transition-colors" disabled>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-          <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/8 text-white/30 hover:text-white/70 transition-colors">
-            <RotateCw className="w-3.5 h-3.5" />
-          </button>
-          <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/8 text-white/30 hover:text-white/70 transition-colors">
-            <Home className="w-3.5 h-3.5" />
-          </button>
-
-          {/* URL bar */}
-          <div className="flex-1 flex items-center max-w-2xl mx-auto">
-            <div className="w-full flex items-center gap-2 h-6 bg-white/6 border border-white/10 rounded px-2.5 hover:bg-white/8 hover:border-white/15 focus-within:border-primary/40 focus-within:bg-white/8 transition-colors">
-              <Shield className="w-3 h-3 text-emerald-500 shrink-0" />
-              <input
-                type="text"
-                value={activeTab?.url === "about:newtab" ? "" : (urlInput || activeTab?.url || "")}
-                onChange={e => setUrlInput(e.target.value)}
-                placeholder="Search or enter address"
-                className="bg-transparent border-none outline-none text-[12px] text-white/70 flex-1 min-w-0 font-mono placeholder:text-white/25"
-                data-testid="browser-url-input"
-              />
-              <Search className="w-3 h-3 text-white/20 shrink-0" />
+      {/* Webview area */}
+      <div className="flex-1 relative overflow-hidden">
+        {!activeTab || activeTab.url === "about:newtab" ? (
+          <div className="absolute inset-0 bg-background flex flex-col items-center justify-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-card border border-border flex items-center justify-center shadow-sm">
+              <span className="text-2xl font-light text-foreground/60">E</span>
+            </div>
+            <div className="text-center">
+              <div className="text-base font-medium text-foreground/60 mb-1">New Tab</div>
+              <div className="text-sm text-muted-foreground">Start typing to search or navigate</div>
             </div>
           </div>
-        </div>
-
-        {/* Webview content area */}
-        <div className="flex-1 relative overflow-hidden">
-          {activeTab ? (
-            activeTab.url === "about:newtab" ? (
-              <div className="absolute inset-0 bg-[#0d0e12] flex flex-col items-center justify-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/20 flex items-center justify-center">
-                  <span className="text-base font-bold text-primary">E</span>
-                </div>
-                <p className="text-[13px] text-white/30 font-medium">New Tab</p>
+        ) : (
+          <div className="absolute inset-0 bg-[#f8f9fa] flex flex-col items-center justify-center gap-3">
+            {isLoading2 && (
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-muted overflow-hidden">
+                <motion.div
+                  className="h-full bg-primary"
+                  animate={{ x: ["-100%", "100%"] }}
+                  transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                />
               </div>
-            ) : (
-              <div className="absolute inset-0 bg-[#f4f4f4] flex items-center justify-center">
-                <div className="text-center space-y-2">
-                  <Globe className="w-8 h-8 mx-auto text-gray-300" />
-                  <p className="text-sm text-gray-400">{activeTab.url}</p>
-                  <p className="text-xs text-gray-300">Simulated webview</p>
-                </div>
-              </div>
-            )
-          ) : (
-            <div className="absolute inset-0 bg-[#0d0e12] flex items-center justify-center">
-              <p className="text-sm text-white/20">Open a tab to start browsing</p>
+            )}
+            <Globe className="w-10 h-10 text-gray-300" />
+            <div className="text-center">
+              <div className="text-sm font-medium text-gray-500">{domain ?? activeTab.url}</div>
+              <div className="text-xs text-gray-400 mt-1">Simulated webview</div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function NavBtn({ icon: Icon, disabled, onClick }: {
+  icon: React.ElementType; disabled?: boolean; onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-9 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-default"
+    >
+      <Icon className="w-4 h-4" />
+    </button>
   );
 }
