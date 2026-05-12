@@ -1,12 +1,34 @@
-import { useState, useRef, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useState, useRef } from "react";
 import {
   useListTabs, useUpdateTab, useCloseTab, useAddHistoryEntry,
   getListTabsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { X, Shield, Search, Lock, MoreVertical } from "lucide-react";
+import { X, Shield, ShieldAlert, Search, Lock, MoreVertical, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Skeleton } from "@/components/ui/skeleton";
+
+declare global {
+  interface Window {
+    Capacitor?: { isNativePlatform?: () => boolean };
+  }
+}
+
+function isNative(): boolean {
+  return typeof window !== "undefined" &&
+    typeof window.Capacitor !== "undefined" &&
+    typeof window.Capacitor.isNativePlatform === "function" &&
+    window.Capacitor.isNativePlatform();
+}
+
+async function openNativeBrowser(url: string): Promise<void> {
+  try {
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.open({ url, presentationStyle: "fullscreen" });
+  } catch {
+    window.open(url, "_blank");
+  }
+}
 
 function getDomain(url: string) {
   if (!url || url === "about:newtab") return null;
@@ -18,7 +40,6 @@ function getFavicon(url: string) {
 }
 
 export default function Browser() {
-  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { data: tabs } = useListTabs();
   const updateTab = useUpdateTab();
@@ -27,19 +48,11 @@ export default function Browser() {
 
   const [urlValue, setUrlValue] = useState("");
   const [urlFocused, setUrlFocused] = useState(false);
-  const [isLoading2, setIsLoading2] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeTab = tabs?.find(t => t.isActive);
-
-  useEffect(() => {
-    if (activeTab && activeTab.url !== "about:newtab") {
-      setUrlValue(activeTab.url);
-    } else {
-      setUrlValue("");
-    }
-  }, [activeTab]);
 
   const invalidateTabs = () => queryClient.invalidateQueries({ queryKey: getListTabsQueryKey() });
 
@@ -53,47 +66,58 @@ export default function Browser() {
     closeTab.mutate({ id }, { onSuccess: invalidateTabs });
   };
 
-  const handleNavigate = () => {
+  const handleNavigate = async () => {
     const url = urlValue.trim();
-    if (!url || !activeTab) return;
-    
+    if (!url) return;
+
     let finalUrl = url;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      finalUrl = url.includes('.') && !url.includes(' ') ? `https://${url}` : `https://google.com/search?q=${encodeURIComponent(url)}`;
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      finalUrl = url.includes(".") && !url.includes(" ")
+        ? `https://${url}`
+        : `https://google.com/search?q=${encodeURIComponent(url)}`;
     }
 
     setUrlFocused(false);
     inputRef.current?.blur();
-    
-    // Simulate loading
-    setIsLoading2(true);
+
+    setIsLoading(true);
     setProgress(10);
     const interval = setInterval(() => setProgress(p => p + (100 - p) * 0.2), 100);
-    
-    updateTab.mutate(
-      { id: activeTab.id, data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } },
-      { 
-        onSuccess: () => {
-          invalidateTabs();
-          addHistory.mutate({ data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } });
-          setTimeout(() => {
-            clearInterval(interval);
-            setProgress(100);
-            setTimeout(() => { setIsLoading2(false); setProgress(0); }, 300);
-          }, 600);
-        }
-      }
-    );
+
+    if (activeTab) {
+      updateTab.mutate(
+        { id: activeTab.id, data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } },
+        {
+          onSuccess: () => {
+            invalidateTabs();
+            addHistory.mutate({ data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } });
+          },
+        },
+      );
+    }
+
+    clearInterval(interval);
+    setProgress(100);
+    setTimeout(() => { setIsLoading(false); setProgress(0); }, 300);
+
+    if (isNative()) {
+      await openNativeBrowser(finalUrl);
+    } else {
+      window.open(finalUrl, "_blank");
+    }
   };
 
-  const displayUrl = urlFocused ? urlValue : (activeTab?.url && activeTab.url !== "about:newtab" ? activeTab.url : "");
+  const displayUrl = urlFocused
+    ? urlValue
+    : (activeTab?.url && activeTab.url !== "about:newtab" ? activeTab.url : "");
   const domain = activeTab ? getDomain(activeTab.url ?? "") : null;
   const isSecure = activeTab?.url?.startsWith("https://");
+  const native = isNative();
 
   return (
     <div className="flex flex-col h-full bg-background relative">
-      
-      {/* Top compact tab strip (Chrome style) */}
+
+      {/* Top compact tab strip */}
       {tabs && tabs.length > 1 && (
         <div className="shrink-0 bg-background flex items-end px-1 pt-1 h-[38px] overflow-x-auto no-scrollbar border-b border-border/50">
           {tabs.map(tab => (
@@ -101,8 +125,8 @@ export default function Browser() {
               key={tab.id}
               onClick={() => handleActivate(tab.id)}
               className={`relative flex items-center gap-2 min-w-[120px] max-w-[200px] h-[34px] px-3 rounded-t-xl shrink-0 cursor-pointer select-none transition-colors border-t border-x border-transparent
-                ${tab.isActive 
-                  ? "bg-card border-border/80 text-foreground z-10 shadow-[0_-2px_8px_rgba(0,0,0,0.05)]" 
+                ${tab.isActive
+                  ? "bg-card border-border/80 text-foreground z-10 shadow-[0_-2px_8px_rgba(0,0,0,0.05)]"
                   : "bg-transparent text-muted-foreground hover:bg-muted/50 border-transparent z-0"}`}
             >
               <img src={getFavicon(tab.url || "") || ""} className="w-3.5 h-3.5 shrink-0" alt="" onError={e => (e.currentTarget.style.display = "none")} />
@@ -124,18 +148,20 @@ export default function Browser() {
         </div>
       )}
 
-      {/* Top Address Bar (Visible when in Browser mode) */}
+      {/* Address Bar */}
       <div className={`shrink-0 bg-card border-b border-border z-30 transition-all ${urlFocused ? "absolute inset-0 h-full flex flex-col bg-background/95 backdrop-blur" : "relative"}`}>
         <div className="flex items-center gap-2 px-2 h-14">
           <div className={`flex-1 flex items-center gap-2 bg-muted/60 border border-border/50 rounded-full px-4 transition-all ${urlFocused ? "h-12 shadow-sm bg-card border-primary/50" : "h-11"}`}>
             {urlFocused ? (
               <Search className="w-4 h-4 text-muted-foreground shrink-0" />
             ) : domain ? (
-              isSecure ? <Shield className="w-4 h-4 text-green-500 shrink-0" /> : <ShieldAlert className="w-4 h-4 text-yellow-500 shrink-0" />
+              isSecure
+                ? <Shield className="w-4 h-4 text-green-500 shrink-0" />
+                : <ShieldAlert className="w-4 h-4 text-yellow-500 shrink-0" />
             ) : (
               <Search className="w-4 h-4 text-muted-foreground shrink-0" />
             )}
-            
+
             <input
               ref={inputRef}
               type="text"
@@ -149,14 +175,14 @@ export default function Browser() {
               autoComplete="off"
               autoCorrect="off"
             />
-            
+
             {urlFocused && urlValue && (
               <button onClick={() => setUrlValue("")} className="w-6 h-6 flex items-center justify-center rounded-full bg-muted text-foreground">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-          
+
           {!urlFocused && (
             <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground">
               <MoreVertical className="w-5 h-5" />
@@ -171,7 +197,7 @@ export default function Browser() {
 
         {/* Loading Progress Bar */}
         <div className="h-0.5 w-full bg-transparent overflow-hidden">
-          {isLoading2 && (
+          {isLoading && (
             <motion.div
               className="h-full bg-primary"
               initial={{ width: 0 }}
@@ -181,7 +207,7 @@ export default function Browser() {
           )}
         </div>
 
-        {/* Search Suggestions Panel */}
+        {/* Search Suggestions */}
         <AnimatePresence>
           {urlFocused && (
             <motion.div
@@ -202,9 +228,7 @@ export default function Browser() {
                   >
                     <Search className="w-4 h-4 text-muted-foreground shrink-0" />
                     <span className="text-[15px] text-foreground font-medium flex-1">{term}</span>
-                    <div className="w-6 h-6 flex items-center justify-center rounded bg-muted/50 text-[10px] text-muted-foreground font-mono">
-                      ↖
-                    </div>
+                    <div className="w-6 h-6 flex items-center justify-center rounded bg-muted/50 text-[10px] text-muted-foreground font-mono">↖</div>
                   </button>
                 ))}
               </div>
@@ -213,39 +237,49 @@ export default function Browser() {
         </AnimatePresence>
       </div>
 
-      {/* Webview Content Area */}
+      {/* Main Content Area */}
       <div className="flex-1 relative bg-background">
         {!activeTab || activeTab.url === "about:newtab" ? (
-          // New Tab / Empty State
-          <div className="absolute inset-0 flex flex-col items-center justify-center pb-20">
-            <h1 className="text-4xl font-semibold tracking-tight text-foreground/80 mb-6">EoN</h1>
-            <button onClick={() => inputRef.current?.focus()} className="flex items-center gap-3 px-5 py-3.5 bg-card border border-border rounded-full shadow-sm text-muted-foreground font-medium text-[15px] w-64 justify-center hover:bg-muted/50 transition-colors">
+          <div className="absolute inset-0 flex flex-col items-center justify-center pb-20 gap-4">
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground/80">EoN</h1>
+            <button
+              onClick={() => inputRef.current?.focus()}
+              className="flex items-center gap-3 px-5 py-3.5 bg-card border border-border rounded-full shadow-sm text-muted-foreground font-medium text-[15px] w-64 justify-center hover:bg-muted/50 transition-colors"
+            >
               <Search className="w-4 h-4" /> Search the web
             </button>
           </div>
         ) : (
-          // Simulated Webview Container
-          <div className="absolute inset-0 bg-[#ffffff] dark:bg-[#121212] overflow-y-auto no-scrollbar">
-            {isLoading2 ? (
-              <div className="w-full h-full flex flex-col pt-12 px-6">
-                <Skeleton className="h-8 w-3/4 bg-gray-200 dark:bg-gray-800 rounded-md mb-6" />
-                <Skeleton className="h-4 w-full bg-gray-200 dark:bg-gray-800 rounded-sm mb-3" />
-                <Skeleton className="h-4 w-full bg-gray-200 dark:bg-gray-800 rounded-sm mb-3" />
-                <Skeleton className="h-4 w-5/6 bg-gray-200 dark:bg-gray-800 rounded-sm mb-8" />
-                
-                <Skeleton className="h-48 w-full bg-gray-200 dark:bg-gray-800 rounded-xl mb-6" />
-              </div>
-            ) : (
-              <div className="w-full min-h-full flex flex-col items-center justify-center text-center p-6 pb-20 opacity-0 animate-in fade-in duration-500">
-                <img src={getFavicon(activeTab.url || "") || ""} className="w-16 h-16 rounded-2xl mb-6 shadow-md" alt="" onError={e => (e.currentTarget.style.display = "none")} />
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{domain}</h2>
-                <p className="text-[15px] text-gray-500 dark:text-gray-400 max-w-[280px] mb-8">
-                  This is a simulated webview for {activeTab.url}. In a real browser, the native rendering engine would display the site content here.
-                </p>
-                <div className="flex items-center justify-center gap-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-[13px] font-medium">
-                  <Lock className="w-3.5 h-3.5" />
-                  Connection is secure
-                </div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pb-20 p-6 gap-6">
+            <img
+              src={getFavicon(activeTab.url || "") || ""}
+              className="w-16 h-16 rounded-2xl shadow-md"
+              alt=""
+              onError={e => (e.currentTarget.style.display = "none")}
+            />
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-foreground mb-1">{domain}</h2>
+              <p className="text-sm text-muted-foreground">{activeTab.url}</p>
+            </div>
+
+            <button
+              onClick={handleNavigate}
+              className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-full font-semibold text-[15px] shadow-md hover:opacity-90 transition-opacity"
+            >
+              <ExternalLink className="w-4 h-4" />
+              {native ? "Open in browser" : "Open website"}
+            </button>
+
+            <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-500 rounded-full text-[13px] font-medium">
+              <Lock className="w-3.5 h-3.5" />
+              Connection is secure
+            </div>
+
+            {isLoading && (
+              <div className="w-full max-w-xs flex flex-col gap-3 mt-2">
+                <Skeleton className="h-4 w-full rounded" />
+                <Skeleton className="h-4 w-4/5 rounded" />
+                <Skeleton className="h-32 w-full rounded-xl" />
               </div>
             )}
           </div>
