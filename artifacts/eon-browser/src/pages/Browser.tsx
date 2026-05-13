@@ -8,8 +8,9 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   X, Shield, ShieldAlert, Search, RotateCw, ArrowLeft,
-  Mic, Globe, Star, StarOff, MoreVertical, ExternalLink,
-  Clock, Bookmark, Share2, Copy, MonitorSmartphone, Plus
+  Mic, Globe, Star, MoreVertical, ExternalLink,
+  Clock, Bookmark, Share2, Copy, MonitorSmartphone, Plus,
+  RefreshCw, AlertTriangle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBrowserStore } from "@/store/browser";
@@ -115,7 +116,12 @@ export default function Browser() {
   const [progress, setProgress] = useState(0);
   const [showPageMenu, setShowPageMenu] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const [iframeBlocked, setIframeBlocked] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeTab = tabs?.find(t => t.isActive);
   const invalidateTabs = () => queryClient.invalidateQueries({ queryKey: getListTabsQueryKey() });
@@ -137,6 +143,48 @@ export default function Browser() {
     );
   };
 
+  const startProgress = () => {
+    setIsLoading(true);
+    setProgress(15);
+    if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
+    progressTimerRef.current = setTimeout(() => setProgress(60), 300);
+  };
+
+  const finishProgress = () => {
+    setProgress(100);
+    if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
+    progressTimerRef.current = setTimeout(() => {
+      setIsLoading(false);
+      setProgress(0);
+    }, 400);
+  };
+
+  const handleIframeLoad = useCallback(() => {
+    finishProgress();
+    setIframeBlocked(false);
+
+    // Try to read the iframe's current URL after navigation (same-origin only)
+    try {
+      const iframeUrl = iframeRef.current?.contentWindow?.location?.href;
+      if (iframeUrl && iframeUrl !== "about:blank" && activeTab) {
+        const iframeDomain = getDomain(iframeUrl);
+        if (iframeUrl !== activeTab.url) {
+          updateTab.mutate(
+            { id: activeTab.id, data: { url: iframeUrl, title: iframeDomain || iframeUrl } },
+            { onSuccess: invalidateTabs },
+          );
+        }
+      }
+    } catch {
+      // Cross-origin — expected, ignore
+    }
+  }, [activeTab]);
+
+  const handleIframeError = useCallback(() => {
+    finishProgress();
+    setIframeBlocked(true);
+  }, []);
+
   const handleNavigate = useCallback(async (overrideUrl?: string) => {
     const raw = (overrideUrl ?? urlValue).trim();
     if (!raw) return;
@@ -146,10 +194,9 @@ export default function Browser() {
     setUrlInputOpen(false);
     setUrlValue("");
     setBookmarked(false);
+    setIframeBlocked(false);
 
-    setIsLoading(true);
-    setProgress(20);
-    setTimeout(() => setProgress(65), 400);
+    startProgress();
 
     if (activeTab) {
       updateTab.mutate(
@@ -165,13 +212,23 @@ export default function Browser() {
 
     if (isNative()) {
       await openWebView(finalUrl);
-    } else {
-      window.open(finalUrl, "_blank");
+      finishProgress();
     }
-
-    setProgress(100);
-    setTimeout(() => { setIsLoading(false); setProgress(0); }, 500);
   }, [urlValue, searchEngine, activeTab]);
+
+  const handleReload = useCallback(() => {
+    setIframeBlocked(false);
+    startProgress();
+    setIframeKey(k => k + 1);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    try {
+      iframeRef.current?.contentWindow?.history.back();
+    } catch {
+      window.history.back();
+    }
+  }, []);
 
   const handleBookmarkCurrent = () => {
     if (!activeTab?.url || activeTab.url === "about:newtab") return;
@@ -210,6 +267,13 @@ export default function Browser() {
       }, 60);
     }
   }, [urlInputOpen]);
+
+  // Reset iframe blocked state whenever the active tab URL changes
+  useEffect(() => {
+    setIframeBlocked(false);
+    setIframeKey(k => k + 1);
+    if (hasUrl) startProgress();
+  }, [activeTab?.url]);
 
   const historyMatches = useMemo(() => {
     const q = urlValue.trim().toLowerCase();
@@ -251,99 +315,93 @@ export default function Browser() {
         </AnimatePresence>
       </div>
 
-      {/* ── CHROME-STYLE TOP BAR (when URL is loaded) ── */}
-      <AnimatePresence>
-        {hasUrl && (
-          <motion.div
-            initial={{ y: -56 }}
-            animate={{ y: 0 }}
-            exit={{ y: -56 }}
-            transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            className="shrink-0 bg-card border-b border-border/50 px-2 h-14 flex items-center gap-1.5 z-20"
+      {/* ── CHROME-STYLE TOP BAR ── */}
+      <div className="shrink-0 bg-card border-b border-border/50 px-2 h-14 flex items-center gap-1.5 z-20">
+        {/* Back */}
+        <button
+          onClick={handleBack}
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground"
+        >
+          <ArrowLeft className="w-[18px] h-[18px]" />
+        </button>
+
+        {/* Address pill */}
+        <button
+          onClick={() => setUrlInputOpen(true)}
+          className="flex-1 flex items-center gap-2 h-10 px-3 bg-muted/60 rounded-full border border-border/40 active:bg-muted transition-colors min-w-0"
+        >
+          {hasUrl ? (
+            isSecure
+              ? <Shield className="w-3.5 h-3.5 text-green-500 shrink-0" />
+              : <ShieldAlert className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+          ) : (
+            <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          )}
+          {hasUrl && faviconUrl && (
+            <img src={faviconUrl} className="w-4 h-4 rounded shrink-0" alt=""
+              onError={e => (e.currentTarget.style.display = "none")} />
+          )}
+          <span className={`flex-1 text-left text-[13px] truncate ${hasUrl ? "font-semibold text-foreground" : "text-muted-foreground font-medium"}`}>
+            {hasUrl ? domain : "Search or type URL"}
+          </span>
+        </button>
+
+        {/* Reload / Stop */}
+        <button
+          onClick={isLoading ? () => { setIsLoading(false); setProgress(0); } : handleReload}
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground"
+        >
+          {isLoading
+            ? <X className="w-[17px] h-[17px]" />
+            : <RotateCw className="w-[17px] h-[17px]" />}
+        </button>
+
+        {/* Bookmark */}
+        <button
+          onClick={handleBookmarkCurrent}
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
+        >
+          <Star className={`w-[18px] h-[18px] ${bookmarked ? "fill-primary text-primary" : "text-muted-foreground"}`} />
+        </button>
+
+        {/* Page menu */}
+        <div className="relative">
+          <button
+            onClick={() => setShowPageMenu(v => !v)}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground"
           >
-            {/* Back */}
-            <button
-              onClick={() => history.back()}
-              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground"
-            >
-              <ArrowLeft className="w-[18px] h-[18px]" />
-            </button>
-
-            {/* Address pill — tappable to open overlay */}
-            <button
-              onClick={() => setUrlInputOpen(true)}
-              className="flex-1 flex items-center gap-2 h-10 px-3 bg-muted/60 rounded-full border border-border/40 active:bg-muted transition-colors min-w-0"
-            >
-              {isSecure
-                ? <Shield className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                : <ShieldAlert className="w-3.5 h-3.5 text-yellow-500 shrink-0" />}
-              {faviconUrl && (
-                <img src={faviconUrl} className="w-4 h-4 rounded shrink-0" alt=""
-                  onError={e => (e.currentTarget.style.display = "none")} />
-              )}
-              <span className="flex-1 text-left text-[13px] font-semibold text-foreground truncate">
-                {domain}
-              </span>
-            </button>
-
-            {/* Reload */}
-            <button
-              onClick={() => handleNavigate(activeTab?.url ?? "")}
-              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground"
-            >
-              <RotateCw className="w-[17px] h-[17px]" />
-            </button>
-
-            {/* Bookmark */}
-            <button
-              onClick={handleBookmarkCurrent}
-              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
-            >
-              {bookmarked
-                ? <Star className="w-[18px] h-[18px] fill-primary text-primary" />
-                : <Star className="w-[18px] h-[18px] text-muted-foreground" />}
-            </button>
-
-            {/* Page menu */}
-            <div className="relative">
-              <button
-                onClick={() => setShowPageMenu(v => !v)}
-                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground"
-              >
-                <MoreVertical className="w-[18px] h-[18px]" />
-              </button>
-              <AnimatePresence>
-                {showPageMenu && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setShowPageMenu(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9, y: -8 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ duration: 0.12 }}
-                      className="absolute right-0 top-12 z-40 bg-card border border-border rounded-2xl shadow-xl overflow-hidden min-w-[200px]"
-                    >
-                      {[
-                        { icon: Star,             label: bookmarked ? "Bookmarked" : "Bookmark page",   action: handleBookmarkCurrent },
-                        { icon: Share2,           label: "Share",                  action: handleShare },
-                        { icon: Copy,             label: "Copy URL",               action: handleCopyUrl },
-                        { icon: MonitorSmartphone,label: isDesktopMode ? "Mobile site" : "Desktop site", action: () => { setIsDesktopMode(!isDesktopMode); setShowPageMenu(false); } },
-                        { icon: ExternalLink,     label: "Open in browser",        action: () => { window.open(activeTab?.url ?? "", "_blank"); setShowPageMenu(false); } },
-                      ].map(({ icon: Icon, label, action }) => (
-                        <button key={label} onClick={action}
-                          className="flex items-center gap-3 w-full px-4 py-3 hover:bg-muted/50 transition-colors text-left border-b border-border/30 last:border-0">
-                          <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span className="text-[14px] text-foreground font-medium">{label}</span>
-                        </button>
-                      ))}
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <MoreVertical className="w-[18px] h-[18px]" />
+          </button>
+          <AnimatePresence>
+            {showPageMenu && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setShowPageMenu(false)} />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: -8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 top-12 z-40 bg-card border border-border rounded-2xl shadow-xl overflow-hidden min-w-[200px]"
+                >
+                  {[
+                    { icon: Star,             label: bookmarked ? "Bookmarked" : "Bookmark page",    action: handleBookmarkCurrent },
+                    { icon: Share2,           label: "Share",                   action: handleShare },
+                    { icon: Copy,             label: "Copy URL",                action: handleCopyUrl },
+                    { icon: MonitorSmartphone,label: isDesktopMode ? "Mobile site" : "Desktop site", action: () => { setIsDesktopMode(!isDesktopMode); setShowPageMenu(false); } },
+                    { icon: ExternalLink,     label: "Open in new tab",         action: () => { window.open(activeTab?.url ?? "", "_blank"); setShowPageMenu(false); } },
+                  ].map(({ icon: Icon, label, action }) => (
+                    <button key={label} onClick={action}
+                      className="flex items-center gap-3 w-full px-4 py-3 hover:bg-muted/50 transition-colors text-left border-b border-border/30 last:border-0">
+                      <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-[14px] text-foreground font-medium">{label}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
 
       {/* Compact multi-tab strip */}
       {tabs && tabs.length > 1 && (
@@ -376,9 +434,9 @@ export default function Browser() {
       )}
 
       {/* ── Main content area ── */}
-      <div className="flex-1 relative bg-background overflow-hidden">
+      <div className="flex-1 relative overflow-hidden">
 
-        {/* NEW TAB STATE */}
+        {/* NEW TAB — shown when no URL is loaded */}
         {!hasUrl && (
           <div className="absolute inset-0 flex flex-col items-center pt-10 pb-4 px-4 overflow-y-auto no-scrollbar">
             <div className="w-full max-w-sm flex flex-col gap-7">
@@ -388,7 +446,6 @@ export default function Browser() {
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">New tab</p>
               </div>
 
-              {/* Tap to search */}
               <button
                 onClick={() => setUrlInputOpen(true)}
                 className="w-full flex items-center gap-3 h-12 px-4 bg-muted/60 border border-border/50 rounded-full text-muted-foreground active:bg-muted transition-colors"
@@ -398,11 +455,13 @@ export default function Browser() {
                 <Mic className="w-4 h-4 shrink-0" />
               </button>
 
-              {/* Quick site grid — uses real top sites from API, falls back to defaults */}
+              {/* Quick site grid */}
               <div className="grid grid-cols-4 gap-3">
                 {(topSites && topSites.length > 0 ? topSites.slice(0, 8) : QUICK_SITES).map((site, i) => {
                   const siteUrl = "url" in site ? site.url : "";
-                  const siteLabel = "title" in site ? (site.title || getDomain(siteUrl) || "") : ("label" in site ? (site as { label: string }).label : "");
+                  const siteLabel = "title" in site
+                    ? (site.title || getDomain(siteUrl) || "")
+                    : ("label" in site ? (site as { label: string }).label : "");
                   return (
                     <button key={i} onClick={() => handleNavigate(siteUrl)}
                       className="flex flex-col items-center gap-2 group">
@@ -418,7 +477,7 @@ export default function Browser() {
                 })}
               </div>
 
-              {/* Recent history on new tab */}
+              {/* Recent history */}
               {allHistory && allHistory.length > 0 && (
                 <div>
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Recent</p>
@@ -446,53 +505,53 @@ export default function Browser() {
           </div>
         )}
 
-        {/* ACTIVE TAB STATE */}
-        {hasUrl && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center pb-8 px-6 gap-6">
-            <div className="w-24 h-24 bg-card border border-border/60 rounded-3xl flex items-center justify-center shadow-lg">
-              {faviconUrl
-                ? <img src={faviconUrl} className="w-14 h-14 rounded-2xl" alt=""
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-                : <Globe className="w-10 h-10 text-muted-foreground" />}
-            </div>
-
-            <div className="text-center space-y-1.5">
-              <h2 className="text-2xl font-bold text-foreground tracking-tight">{domain}</h2>
-              <p className="text-xs text-muted-foreground truncate max-w-[260px]">{activeTab?.url}</p>
-            </div>
-
-            <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-semibold
-              ${isSecure ? "bg-green-500/10 text-green-500" : "bg-yellow-500/10 text-yellow-600"}`}>
-              {isSecure
-                ? <><Shield className="w-3 h-3" /> Secure</>
-                : <><ShieldAlert className="w-3 h-3" /> Not secure</>}
-            </div>
-
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={() => handleNavigate(activeTab?.url ?? "")}
-              className="flex items-center gap-2.5 px-8 py-3.5 bg-primary text-white rounded-full font-semibold text-[15px] shadow-md w-full max-w-[260px] justify-center"
-            >
-              <ExternalLink className="w-4 h-4" /> Open {domain}
-            </motion.button>
-
-            {/* Other tabs strip */}
-            {tabs && tabs.filter(t => t.url && t.url !== "about:newtab" && t.id !== activeTab?.id).length > 0 && (
-              <div className="w-full max-w-sm">
-                <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide mb-2">Other tabs</p>
-                <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                  {tabs.filter(t => t.url && t.url !== "about:newtab" && t.id !== activeTab?.id).slice(0, 6).map(tab => (
-                    <button key={tab.id} onClick={() => handleActivate(tab.id)}
-                      className="flex items-center gap-2 px-3 py-2 bg-card border border-border/50 rounded-xl shrink-0 active:bg-muted transition-colors">
-                      <img src={getFavicon(tab.url || "") || ""} className="w-4 h-4 rounded" alt=""
-                        onError={e => (e.currentTarget.style.display = "none")} />
-                      <span className="text-[12px] text-foreground font-medium max-w-[72px] truncate">
-                        {getDomain(tab.url ?? "") || "Tab"}
-                      </span>
-                    </button>
-                  ))}
+        {/* ACTIVE TAB — real iframe webview */}
+        {hasUrl && !isNative() && (
+          <div className="absolute inset-0">
+            {iframeBlocked ? (
+              /* Blocked / can't embed fallback */
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-8 bg-background">
+                <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center">
+                  <AlertTriangle className="w-8 h-8 text-yellow-500" />
+                </div>
+                <div className="text-center space-y-2">
+                  <h2 className="text-[17px] font-bold text-foreground">Can't display this page</h2>
+                  <p className="text-[13px] text-muted-foreground leading-relaxed">
+                    <strong className="text-foreground">{domain}</strong> has blocked embedding.
+                    You can still open it in a new browser tab.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 w-full max-w-xs">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => window.open(activeTab?.url ?? "", "_blank")}
+                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-primary text-white rounded-full font-semibold text-[15px] shadow-md"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open {domain}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={handleReload}
+                    className="flex items-center justify-center gap-2 w-full py-3 bg-muted text-foreground rounded-full font-medium text-[14px]"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Try again
+                  </motion.button>
                 </div>
               </div>
+            ) : (
+              <iframe
+                key={iframeKey}
+                ref={iframeRef}
+                src={activeTab?.url}
+                title={domain || "Browser"}
+                className="w-full h-full border-0 block bg-white"
+                onLoad={handleIframeLoad}
+                onError={handleIframeError}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads"
+                allow="autoplay; encrypted-media; fullscreen; geolocation; camera; microphone"
+              />
             )}
           </div>
         )}
@@ -633,7 +692,7 @@ export default function Browser() {
                     {QUICK_SITES.map(site => (
                       <button key={site.url} onClick={() => handleNavigate(site.url)}
                         className="flex flex-col items-center gap-2 group">
-                        <div className="w-13 h-13 w-12 h-12 bg-card border border-border/50 rounded-xl flex items-center justify-center group-active:scale-95 transition-transform">
+                        <div className="w-12 h-12 bg-card border border-border/50 rounded-xl flex items-center justify-center group-active:scale-95 transition-transform">
                           <img
                             src={`https://www.google.com/s2/favicons?domain=${new URL(site.url).hostname}&sz=64`}
                             className="w-7 h-7 rounded" alt={site.label}
