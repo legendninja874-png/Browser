@@ -223,3 +223,40 @@ To add a new table: edit schema → run `pnpm --filter @workspace/db run push`.
 - The codebase should feel enterprise-grade and handcrafted
 - Design: clean, minimal, modern — resembles Chrome Mobile / Lemur / Samsung Internet
 - No neon, no glow, no cyberpunk, no gaming aesthetics
+- Store every chat session summary in this file under Chat History
+
+---
+
+## Backend API
+
+The native APK points to an external Replit backend:
+- **Current URL**: `https://workspace.beastfuher.replit.app`
+- **Configured in**: `artifacts/eon-browser/src/App.tsx` (line 13, `NATIVE_FALLBACK_API`)
+- **Also in**: `.github/workflows/build-android.yml` (`VITE_API_URL` env var)
+- **Override**: Set `VITE_API_URL` as a GitHub Actions repository secret to point the APK at any new backend URL without changing code
+
+**Note**: This Replit project has its own fully working API server (`artifacts/api-server`) that can serve as a drop-in replacement if the external backend expires. Deploy this project and update the two locations above.
+
+---
+
+## GitHub Actions — APK Build
+
+Workflow: `.github/workflows/build-android.yml`
+- Triggers on push to `main`/`master`, or manually via `workflow_dispatch`
+- Builds a debug APK using Capacitor + Gradle
+- Uploads the APK as a GitHub Actions artifact (retained 30 days)
+- To point the APK at a different backend: set `VITE_API_URL` as a repository secret in GitHub → Settings → Secrets and variables → Actions
+
+---
+
+## Chat History
+
+### Session — 2026-05-13
+- Completed full migration into the Replit environment: installed all pnpm packages, pushed the Drizzle DB schema, restarted both workflows (EoN API Server on port 8080, EoN Browser App on port 5000)
+- Confirmed no external auth (no Supabase/Firebase/Clerk etc.) and no external integration API calls in app logic
+- App verified working end-to-end via screenshot
+- User questions addressed:
+  - Backend API URL expiry: the project has its own built-in API server — deploy it and update `NATIVE_FALLBACK_API` + `VITE_API_URL` secret
+  - Publishing on another account: fully supported, just update the URL in the two places listed above
+  - GitHub Actions APK: workflow already set up at `.github/workflows/build-android.yml`, controlled via `VITE_API_URL` secret
+- User noted they need further app changes (to be detailed in next session)
