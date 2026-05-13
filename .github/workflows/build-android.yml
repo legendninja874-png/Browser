@@ -28,6 +28,10 @@ jobs:
 
       - name: Build web app
         run: pnpm --filter @workspace/eon-browser run build
+        env:
+          # Point the APK at the deployed Replit backend so API calls resolve.
+          # Override by setting VITE_API_URL as a GitHub Actions repository secret.
+          VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://workspace.beastfuher.replit.app' }}
 
       - name: Set up Java 21
         uses: actions/setup-java@v4

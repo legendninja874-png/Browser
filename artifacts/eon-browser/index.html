@@ -55,14 +55,17 @@
     <script type="module" src="/src/main.tsx"></script>
 
     <!-- Service Worker Registration -->
+    <!-- Skip SW in native Capacitor shell — it cannot intercept capacitor:// scheme
+         requests and may stall asset loading on certain Android WebView versions. -->
     <script>
-      if ('serviceWorker' in navigator) {
+      var __eonIsNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+      if (!__eonIsNative && 'serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then((reg) => {
               console.log('[EoN] Service Worker registered:', reg.scope);
               reg.addEventListener('updatefound', () => {
-                const newWorker = reg.installing;
+                var newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
                   if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                     console.log('[EoN] New version available — reload to update');
