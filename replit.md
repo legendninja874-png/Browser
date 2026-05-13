@@ -8,7 +8,7 @@ A full-stack browser platform simulation built as a React web app. Designed to l
 
 ```bash
 pnpm --filter @workspace/api-server  run dev   # API server  — port 8080
-pnpm --filter @workspace/eon-browser run dev   # Browser UI  — port 22144
+pnpm --filter @workspace/eon-browser run dev   # Browser UI  — port 5000
 pnpm run typecheck                             # Full typecheck (libs + leaves)
 pnpm run build                                 # Typecheck + build all packages
 pnpm --filter @workspace/api-spec run codegen  # Regenerate React Query hooks + Zod schemas
@@ -16,6 +16,16 @@ pnpm --filter @workspace/db run push           # Push DB schema (dev only)
 ```
 
 Required environment variable: `DATABASE_URL` (Postgres connection string — already configured in this Repl).
+
+### Port Conflict Fix (IMPORTANT)
+
+The Replit artifact system sometimes auto-starts duplicate workflows that steal ports 8080 and 5000. If either main workflow fails with `EADDRINUSE`, run:
+
+```bash
+fuser -k 8080/tcp 2>/dev/null; fuser -k 5000/tcp 2>/dev/null; sleep 2
+```
+
+Then restart **"EoN API Server"** and **"EoN Browser App"** workflows. The artifact-level workflows (`artifacts/api-server: API Server`, `artifacts/eon-browser: web`) can be left in failed state — only the two named workflows above matter.
 
 ---
 
@@ -56,11 +66,14 @@ lib/
 | `lib/api-spec/openapi.yaml` | OpenAPI source — edit this first, then run codegen |
 | `lib/db/src/schema/` | DB table definitions (tabs, workspaces, bookmarks, history, intelligence, downloads, activity) |
 | `artifacts/api-server/src/routes/` | Express route handlers |
+| `artifacts/api-server/src/routes/proxy.ts` | Web proxy route — strips iframe-blocking headers, rewrites URLs, injects JS shim |
 | `artifacts/eon-browser/src/index.css` | Global CSS, theme custom properties, 5 theme variants |
 | `artifacts/eon-browser/src/App.tsx` | Root: ThemeProvider + WouterRouter + query client |
 | `artifacts/eon-browser/src/contexts/theme.tsx` | ThemeContext (dark/amoled/gray/light/blue) |
 | `artifacts/eon-browser/src/components/layout/Shell.tsx` | Bottom nav bar + MenuSheet overlay (wraps every page) |
+| `artifacts/eon-browser/src/pages/Browser.tsx` | Full browser view with real iframe webview via proxy |
 | `artifacts/eon-browser/src/pages/` | All 10 pages (see below) |
+| `artifacts/eon-browser/src/store/browser.ts` | Zustand store: urlInputOpen, pendingUrlInput, searchEngine, isDesktopMode |
 | `lib/api-client-react/src/generated/` | Generated hooks — never edit |
 | `lib/api-zod/src/generated/` | Generated Zod schemas — never edit |
 
@@ -71,7 +84,7 @@ lib/
 | Route | File | Description |
 |-------|------|-------------|
 | `/` | `Home.tsx` | Lemur-style new tab page: "EoN" branding, search bar, shortcuts, top sites, continue browsing, suggestions |
-| `/browser` | `Browser.tsx` | Browser view: top bar (URL + tab strip), simulated webview content |
+| `/browser` | `Browser.tsx` | Real browser view: persistent Chrome-style top bar + real iframe webview via server-side proxy |
 | `/tabs` | `Tabs.tsx` | Chrome-style 2-column tab grid manager with search, filters, close buttons |
 | `/bookmarks` | `Bookmarks.tsx` | Folder-grouped bookmark list with search and delete |
 | `/history` | `History.tsx` | Date-grouped history with search and clear |
@@ -136,6 +149,79 @@ All colors use space-separated HSL values (NOT `hsl()` wrapper):
 
 ---
 
+## Browser Webview — Proxy Architecture
+
+`Browser.tsx` renders real websites inside an `<iframe>` using a server-side proxy. This is how iframe-blocking headers (`X-Frame-Options`, `Content-Security-Policy: frame-ancestors`) from sites like Google, YouTube, and Reddit are bypassed.
+
+### How it works
+
+1. **User navigates** to a URL via the URL overlay or quick-site grid
+2. **`Browser.tsx`** sets the iframe `src` to `/api/proxy?url=<encoded-url>`
+3. **`/api/proxy`** (Express route in `proxy.ts`) fetches the target URL server-side:
+   - Strips all iframe-blocking response headers
+   - Rewrites every `src`, `href`, `action`, `srcset` attribute in the HTML to route through `/api/proxy`
+   - Rewrites CSS `url()` references
+   - Injects a `<base>` tag for relative URL resolution
+   - Injects a JS shim that intercepts `fetch()`, `XMLHttpRequest`, link clicks, form submissions, and `history.pushState` — all routed back through the proxy or posted to the parent frame as `eon-navigate` / `eon-urlchange` messages
+4. **`Browser.tsx`** listens for `window.addEventListener('message', ...)` from the iframe shim to:
+   - Navigate to new URLs the user clicked inside the page
+   - Update the active tab's stored URL on SPA navigation
+
+### Proxy file: `artifacts/api-server/src/routes/proxy.ts`
+
+Key functions:
+- `rewriteHtml(html, base)` — rewrites all resource/link attributes
+- `rewriteCss(css, base)` — rewrites `url()` in stylesheets
+- `buildShim(base)` — returns the injected `<script>` block
+- `proxyFetch(url, req)` — server-side fetch with mobile User-Agent
+
+### What loads well vs. limitations
+
+| Site type | Result |
+|-----------|--------|
+| Wikipedia, Reddit, GitHub, news sites | Loads fully — all resources proxied |
+| Google Search | Loads — search results work |
+| YouTube | Loads page — video playback varies (DRM) |
+| Instagram, WhatsApp | May show login walls — heavy bot detection |
+
+**Do not** try to replace this with Chromium/Blink compilation — that requires 64GB+ RAM and 40M+ lines of C++ and is impossible in any cloud environment.
+
+### iframe sandbox attributes
+
+```
+sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads allow-modals"
+allow="autoplay; encrypted-media; fullscreen; geolocation; camera; microphone"
+```
+
+---
+
+## Browser.tsx — Key State & Behaviour
+
+The browser page manages the full Chrome-style UX:
+
+- **Persistent top bar** (always visible): back button, address pill (tappable → URL overlay), reload/stop, bookmark star, 3-dot menu
+- **Multi-tab strip**: shown when >1 tab exists; each tab has favicon, title, close button; + button for new tab
+- **New Tab page**: EoN branding, search pill, 8-icon quick-site grid (uses `useGetTopSites` API, falls back to static), recent history
+- **URL Overlay** (full-screen slide-up): live history search, bookmark suggestions, inline "Search for X" / "Navigate to X" items, quick-access grid
+- **3-dot page menu**: Bookmark page, Share, Copy URL, Desktop site toggle, Open in new tab
+- **`iframeBlocked` state**: shown when a site fails to load even through proxy — friendly error with "Open in new tab" fallback
+- **`iframeKey`**: incremented on reload to force iframe remount
+- **Message listener**: handles `eon-navigate` (navigate to new URL) and `eon-urlchange` (SPA URL update) from proxy shim
+
+### Zustand store (`store/browser.ts`)
+
+```ts
+urlInputOpen: boolean        // controls URL overlay visibility
+setUrlInputOpen(v): void
+pendingUrlInput: string      // pre-fills URL overlay before navigating to /browser
+setPendingUrlInput(v): void
+searchEngine: string         // "google" | "bing" | "duckduckgo" | "brave" | "ecosia" | "yahoo"
+isDesktopMode: boolean
+setIsDesktopMode(v): void
+```
+
+---
+
 ## API Architecture (OpenAPI-First)
 
 1. **Edit** `lib/api-spec/openapi.yaml` to define or modify any endpoint
@@ -148,6 +234,13 @@ All colors use space-separated HSL values (NOT `hsl()` wrapper):
 - Body schema names must be entity-shaped (e.g. `TabInput`, NOT `CreateTabBody`) — avoids TS2308 collisions
 - Generated files live in `lib/api-client-react/src/generated/` and `lib/api-zod/src/generated/` — never edit these manually
 - After editing openapi.yaml, always run codegen before touching frontend or backend code
+
+### API Routes
+
+| Route | File | Notes |
+|-------|------|-------|
+| `GET /api/proxy?url=` | `proxy.ts` | Web proxy — no OpenAPI spec, added directly to router |
+| All other `/api/*` | Per-file routers | OpenAPI-first, codegen-driven |
 
 ---
 
@@ -187,6 +280,8 @@ To add a new table: edit schema → run `pnpm --filter @workspace/db run push`.
 5. **After any openapi.yaml change**, run codegen before anything else
 6. **Artifacts don't import from each other** — shared code goes in `lib/`
 7. **Button nesting**: never put a `<button>` inside another `<button>` in React — use `<div role="button">` for the outer when needed
+8. **Port conflicts**: artifact auto-workflows steal ports 8080/5000 — always kill them with `fuser -k` before restarting main workflows
+9. **Proxy route is NOT in openapi.yaml** — it was added directly to `routes/index.ts` and `routes/proxy.ts`; do not try to codegen it
 
 ---
 
@@ -200,18 +295,21 @@ To add a new table: edit schema → run `pnpm --filter @workspace/db run push`.
 - Theme system: 5 themes (dark, amoled, gray, light, blue) — instant switch, localStorage persistence
 - Settings: grouped Chrome-style list with sub-pages (Appearance, Privacy, Performance, Sync, Search Engine, Downloads)
 - Home page: Lemur-style with shortcuts, top sites, continue browsing, smart suggestions
-- Browser view: top URL bar, horizontal tab strip, simulated webview
+- **Browser view**: persistent Chrome-style top bar (always visible), real iframe webview, URL overlay with live history/bookmark search
+- **Server-side web proxy**: strips X-Frame-Options/CSP headers, rewrites all sub-resource URLs, injects fetch/XHR/navigation shim — loads most of the web inside the iframe
+- Multi-tab strip with live tab switching and close buttons
 - EoN Intelligence: AI chat with conversation list sidebar, 6 AI tool shortcuts
 - All CRUD pages: Bookmarks, History, Downloads, Workspaces, Dashboard
 - OpenAPI-first backend with full Drizzle ORM persistence
 
 ### Ready to Implement Next
 
+- **Ad blocker**: block known tracker/ad domains at the proxy level in `proxy.ts` before pages load
 - **Real LLM integration**: swap simulated AI responses in `artifacts/api-server/src/routes/intelligence.ts` for a real model via Replit AI Integrations (OpenAI, Anthropic, Gemini — all available)
-- **Real webview**: embed actual iframes in the browser view so navigating to a URL shows real web content
 - **User accounts / sync**: Replit Auth is ready to integrate for real multi-device sync
 - **Extensions system**: the architecture supports adding an extensions store and tool panel
 - **Mobile PWA**: convert the app to a Progressive Web App with service workers for offline use
+- **Download interception**: detect file links in the proxy and route them to the Downloads page
 - **Push notifications**: Replit supports them; wiring is straightforward
 
 ---
@@ -283,3 +381,17 @@ Workflow: `.github/workflows/build-android.yml`
   - **Home.tsx**: Search bar now opens URL overlay with pre-filled query instead of just navigating to /browser; quick-site buttons navigate properly
   - **Shell.tsx**: `handleAddressTap` now sets `urlInputOpen` synchronously BEFORE navigating (fixes timing race); 3-dot menu fully functional
 - Workflow fixes: Port conflict kills + restart sequence documented
+
+### Session — 2026-05-13 (part 4)
+- User wanted real websites (Google, YouTube, etc.) to load inside the browser instead of showing a placeholder card
+- **Phase 1 — Real iframe webview**: Replaced the fake "site card" UI in `Browser.tsx` with a real `<iframe>` element. Sites that don't block embedding (Wikipedia, GitHub, etc.) load immediately. Sites with `X-Frame-Options` or CSP `frame-ancestors` show a friendly error with "Open in new tab" fallback.
+- **Phase 2 — Server-side proxy** (`artifacts/api-server/src/routes/proxy.ts`): Built a full web proxy route `GET /api/proxy?url=` that:
+  - Fetches any URL server-side with a mobile Chrome User-Agent
+  - Strips all iframe-blocking headers (`X-Frame-Options`, `Content-Security-Policy`, COOP, COEP, etc.)
+  - **Rewrites HTML**: every `src`, `href`, `action`, `srcset` attribute on resource/link/form/script/img/video/audio tags is rewritten to route through `/api/proxy`
+  - **Rewrites CSS**: `url()` references in stylesheets are rewritten
+  - **Injects JS shim**: intercepts `fetch()`, `XMLHttpRequest`, link clicks, form submissions, `window.open`, `location` assignment, and `history.pushState/replaceState` — posts `eon-navigate` / `eon-urlchange` messages to the parent frame
+  - **`Browser.tsx`**: listens for those messages to update the active tab URL and navigate to new pages
+  - Proxy verified working: Wikipedia loads with 100% rewritten sub-resource URLs, Google and YouTube return 200 and load
+- Registered proxy router in `artifacts/api-server/src/routes/index.ts`
+- User asked about making EoN a true Chromium fork (like Kiwi/Lemur) — explained this requires forking 40M lines of C++ code, 64GB+ RAM to compile, and is not feasible in any cloud environment; the proxy approach is the correct web-platform equivalent
