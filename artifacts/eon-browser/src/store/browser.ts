@@ -12,7 +12,8 @@ export interface BrowserState {
   readerMode: boolean;
   adBlockEnabled: boolean;
   theme: Theme;
-  
+  urlInputOpen: boolean;
+
   setSearchEngine: (engine: BrowserState["searchEngine"]) => void;
   setIsIncognito: (incognito: boolean) => void;
   setBottomBarButtons: (buttons: string[]) => void;
@@ -22,6 +23,7 @@ export interface BrowserState {
   setReaderMode: (reader: boolean) => void;
   setAdBlockEnabled: (adBlock: boolean) => void;
   setTheme: (theme: Theme) => void;
+  setUrlInputOpen: (open: boolean) => void;
 }
 
 export const useBrowserStore = create<BrowserState>((set) => ({
@@ -34,7 +36,8 @@ export const useBrowserStore = create<BrowserState>((set) => ({
   readerMode: false,
   adBlockEnabled: true,
   theme: (localStorage.getItem("eon-theme") as Theme) || "dark",
-  
+  urlInputOpen: false,
+
   setSearchEngine: (searchEngine) => set({ searchEngine }),
   setIsIncognito: (isIncognito) => set({ isIncognito }),
   setBottomBarButtons: (bottomBarButtons) => set({ bottomBarButtons }),
@@ -43,6 +46,7 @@ export const useBrowserStore = create<BrowserState>((set) => ({
   setIsDesktopMode: (isDesktopMode) => set({ isDesktopMode }),
   setReaderMode: (readerMode) => set({ readerMode }),
   setAdBlockEnabled: (adBlockEnabled) => set({ adBlockEnabled }),
+  setUrlInputOpen: (urlInputOpen) => set({ urlInputOpen }),
   setTheme: (theme) => {
     localStorage.setItem("eon-theme", theme);
     document.documentElement.setAttribute("data-theme", theme);

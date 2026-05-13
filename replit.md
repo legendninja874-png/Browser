@@ -260,3 +260,12 @@ Workflow: `.github/workflows/build-android.yml`
   - Publishing on another account: fully supported, just update the URL in the two places listed above
   - GitHub Actions APK: workflow already set up at `.github/workflows/build-android.yml`, controlled via `VITE_API_URL` secret
 - User noted they need further app changes (to be detailed in next session)
+
+### Session — 2026-05-13 (continued)
+- User reported browser page looked unprofessional: ugly "Done" text + URL bar shown by InAppBrowser when opening sites, redundant top address bar in Browser.tsx, bottom URL bar not working as URL entry point
+- Screenshots confirmed: top address bar X'd out by user, bottom Shell nav bar approved
+- Changes made:
+  - **Browser.tsx**: Removed top address bar entirely; new tab page now shows EoN + 8-icon quick-site grid + search pill; active tab page shows polished site card with Chrome-style top bar (favicon + domain + reload + open buttons); Chrome-style full-screen URL input overlay slides up from bottom with quick access grid + search/navigate suggestions
+  - **Shell.tsx**: Bottom URL pill now triggers the URL overlay directly (on /browser: opens overlay; off /browser: navigates then opens overlay)
+  - **store/browser.ts**: Added `urlInputOpen` / `setUrlInputOpen` state for Shell↔Browser communication
+  - **InAppBrowser**: Changed to `showToolbar: false` + `hardwareBack: true` — removes the ugly "Done" button and URL bar; user closes webview with Android hardware back button (standard Chrome behavior)
