@@ -15,5 +15,18 @@
   },
   "dependencies": {
     "sharp": "^0.34.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp",
+      "esbuild",
+      "@esbuild/linux-x64",
+      "better-sqlite3",
+      "canvas",
+      "bcrypt",
+      "@capacitor/android",
+      "@capacitor/inappbrowser",
+      "@capacitor/browser"
+    ]
   }
 }

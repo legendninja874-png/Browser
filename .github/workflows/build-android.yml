@@ -24,7 +24,7 @@ jobs:
           version: 10
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build web app
         run: pnpm --filter @workspace/eon-browser run build
@@ -43,8 +43,7 @@ jobs:
           accept-android-sdk-licenses: true
 
       - name: Install Android build tools
-        run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Write local.properties
         working-directory: artifacts/eon-browser/android
@@ -52,7 +51,7 @@ jobs:
 
       - name: Sync Capacitor (copies web assets)
         working-directory: artifacts/eon-browser
-        run: pnpm exec cap sync android --inline
+        run: pnpm exec cap sync android
 
       - name: Copy app icons to Android resources
         run: node scripts/copy-android-icons.mjs
