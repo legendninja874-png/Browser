@@ -5,7 +5,7 @@ import {
   ArrowLeft, ArrowRight, Shield, Mic, Search,
   MoreVertical, Star, RotateCw, Plus, EyeOff, Bookmark,
   History, Download, Settings, BrainCircuit, Activity,
-  MonitorSmartphone, Share2, Printer
+  MonitorSmartphone, Share2, Printer,
 } from "lucide-react";
 import {
   useListTabs, useCreateTab, useGetSyncStatus,
@@ -15,6 +15,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useBrowserStore } from "@/store/browser";
 
 interface ShellProps { children: React.ReactNode }
+
+function dispatch(name: string) {
+  window.dispatchEvent(new CustomEvent(name));
+}
 
 export function Shell({ children }: ShellProps) {
   const [location, navigate] = useLocation();
@@ -39,7 +43,7 @@ export function Shell({ children }: ShellProps) {
           queryClient.invalidateQueries({ queryKey: getListTabsQueryKey() });
           navigate("/browser");
         },
-      }
+      },
     );
   };
 
@@ -49,10 +53,11 @@ export function Shell({ children }: ShellProps) {
   };
 
   const isBrowser = location === "/browser";
+  const hasUrl = isBrowser && !!activeTab?.url && activeTab.url !== "about:newtab";
 
   const getAddressLabel = () => {
-    if (activeTab?.url && activeTab.url !== "about:newtab") {
-      try { return new URL(activeTab.url).hostname.replace("www.", ""); } catch { return activeTab.url; }
+    if (hasUrl) {
+      try { return new URL(activeTab!.url!).hostname.replace("www.", ""); } catch { return activeTab?.url; }
     }
     return null;
   };
@@ -61,9 +66,17 @@ export function Shell({ children }: ShellProps) {
   const isSecure = activeTab?.url?.startsWith("https://");
 
   const handleAddressTap = () => {
-    // Set the store flag synchronously BEFORE navigating so Browser.tsx sees it on mount
     setUrlInputOpen(true);
     if (!isBrowser) navigate("/browser");
+  };
+
+  const handleBack = () => {
+    if (isBrowser) dispatch("eon-browser-back");
+    else window.history.back();
+  };
+
+  const handleForward = () => {
+    if (isBrowser) dispatch("eon-browser-forward");
   };
 
   return (
@@ -73,28 +86,40 @@ export function Shell({ children }: ShellProps) {
         {children}
       </main>
 
-      {/* Bottom navigation bar */}
+      {/* ── Bottom navigation bar ── */}
       <nav className="shrink-0 h-[56px] glass-morphism border-t flex items-center px-2 gap-1 z-40">
-        <NavButton icon={ArrowLeft} disabled={!isBrowser} onClick={() => {}} />
-        <NavButton icon={ArrowRight} disabled={true} onClick={() => {}} />
 
-        {/* Address bar pill — primary URL entry point */}
+        {/* Back */}
+        <NavButton
+          icon={ArrowLeft}
+          onClick={handleBack}
+          disabled={!isBrowser}
+        />
+
+        {/* Forward */}
+        <NavButton
+          icon={ArrowRight}
+          onClick={handleForward}
+          disabled={!hasUrl}
+        />
+
+        {/* Address bar pill */}
         <button
           onClick={handleAddressTap}
           className={`flex-1 flex items-center gap-2 h-10 px-3 rounded-full border transition-colors mx-1
-            ${isBrowser && addressLabel
+            ${hasUrl
               ? "bg-card border-border/70 text-foreground"
               : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted"}`}
         >
-          {isBrowser && addressLabel ? (
+          {hasUrl ? (
             isSecure
               ? <Shield className="w-3.5 h-3.5 text-green-500 shrink-0" />
-              : <Search className="w-3.5 h-3.5 shrink-0" />
+              : <Search className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
           ) : (
             <Search className="w-3.5 h-3.5 shrink-0" />
           )}
-          <span className={`flex-1 text-left text-[13px] truncate font-medium ${isBrowser && addressLabel ? "text-foreground" : "text-muted-foreground"}`}>
-            {isBrowser && addressLabel ? addressLabel : "Search or type URL"}
+          <span className={`flex-1 text-left text-[13px] truncate font-medium ${hasUrl ? "text-foreground" : "text-muted-foreground"}`}>
+            {hasUrl ? addressLabel : "Search or type URL"}
           </span>
           <Mic className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         </button>
@@ -109,7 +134,7 @@ export function Shell({ children }: ShellProps) {
           </div>
         </button>
 
-        {/* More menu */}
+        {/* More */}
         <NavButton icon={MoreVertical} onClick={() => setShowMenu(true)} />
       </nav>
 
@@ -135,16 +160,36 @@ export function Shell({ children }: ShellProps) {
               {/* Quick actions row */}
               <div className="flex items-center justify-around px-4 pt-5 pb-4 border-b border-border">
                 {[
-                  { icon: ArrowLeft,  label: "Back",     action: () => setShowMenu(false) },
-                  { icon: ArrowRight, label: "Forward",  action: () => setShowMenu(false) },
-                  { icon: Star,       label: "Bookmark", action: () => setShowMenu(false) },
-                  { icon: Search,     label: "Find",     action: () => setShowMenu(false) },
-                  { icon: RotateCw,   label: "Refresh",  action: () => setShowMenu(false) },
-                ].map(({ icon: Icon, label, action }) => (
+                  {
+                    icon: ArrowLeft, label: "Back",
+                    action: () => { setShowMenu(false); if (isBrowser) dispatch("eon-browser-back"); },
+                    disabled: !isBrowser,
+                  },
+                  {
+                    icon: ArrowRight, label: "Forward",
+                    action: () => { setShowMenu(false); if (isBrowser) dispatch("eon-browser-forward"); },
+                    disabled: !hasUrl,
+                  },
+                  {
+                    icon: Star, label: "Bookmark",
+                    action: () => { setShowMenu(false); dispatch("eon-browser-bookmark"); },
+                    disabled: !hasUrl,
+                  },
+                  {
+                    icon: Search, label: "Find",
+                    action: () => setShowMenu(false),
+                  },
+                  {
+                    icon: RotateCw, label: "Reload",
+                    action: () => { setShowMenu(false); dispatch("eon-browser-reload"); },
+                    disabled: !hasUrl,
+                  },
+                ].map(({ icon: Icon, label, action, disabled }) => (
                   <button
                     key={label}
                     onClick={action}
-                    className="flex flex-col items-center gap-1.5 p-2 rounded-xl group"
+                    disabled={disabled}
+                    className="flex flex-col items-center gap-1.5 p-2 rounded-xl group disabled:opacity-40"
                   >
                     <div className="w-11 h-11 rounded-full bg-muted group-hover:bg-muted/80 group-active:scale-95 flex items-center justify-center transition-all">
                       <Icon className="w-5 h-5 text-foreground/70" />
@@ -157,15 +202,15 @@ export function Shell({ children }: ShellProps) {
               {/* Menu items */}
               <div className="flex-1 overflow-y-auto py-2">
                 {[
-                  { icon: Plus,            label: "New tab",             action: handleNewTab },
-                  { icon: EyeOff,          label: "New incognito tab",   action: handleNewTab },
+                  { icon: Plus,             label: "New tab",             action: handleNewTab },
+                  { icon: EyeOff,           label: "New incognito tab",   action: handleNewTab },
                   null,
-                  { icon: Bookmark,        label: "Bookmarks",           action: () => handleMenuAction("/bookmarks") },
-                  { icon: History,         label: "History",             action: () => handleMenuAction("/history") },
-                  { icon: Download,        label: "Downloads",           action: () => handleMenuAction("/downloads") },
+                  { icon: Bookmark,         label: "Bookmarks",           action: () => handleMenuAction("/bookmarks") },
+                  { icon: History,          label: "History",             action: () => handleMenuAction("/history") },
+                  { icon: Download,         label: "Downloads",           action: () => handleMenuAction("/downloads") },
                   null,
-                  { icon: BrainCircuit,    label: "EoN AI",              action: () => handleMenuAction("/intelligence") },
-                  { icon: Activity,        label: "Dashboard",           action: () => handleMenuAction("/dashboard") },
+                  { icon: BrainCircuit,     label: "EoN AI",              action: () => handleMenuAction("/intelligence") },
+                  { icon: Activity,         label: "Dashboard",           action: () => handleMenuAction("/dashboard") },
                   null,
                   {
                     icon: MonitorSmartphone,
@@ -173,13 +218,15 @@ export function Shell({ children }: ShellProps) {
                     action: () => { setIsDesktopMode(!isDesktopMode); setShowMenu(false); },
                     rightLabel: isDesktopMode ? "On" : undefined,
                   },
-                  { icon: Share2,  label: "Share…",   action: () => setShowMenu(false) },
-                  { icon: Printer, label: "Print",    action: () => setShowMenu(false) },
+                  { icon: Share2,   label: "Share…", action: () => setShowMenu(false) },
+                  { icon: Printer,  label: "Print",  action: () => setShowMenu(false) },
                   null,
                   { icon: Settings, label: "Settings", action: () => handleMenuAction("/settings") },
                 ].map((item, i) => {
                   if (!item) return <div key={i} className="h-[1px] bg-border mx-4 my-2" />;
-                  const { icon: Icon, label, action, rightLabel } = item;
+                  const { icon: Icon, label, action, rightLabel } = item as {
+                    icon: React.ElementType; label: string; action: () => void; rightLabel?: string;
+                  };
                   return (
                     <button
                       key={label}
@@ -198,7 +245,7 @@ export function Shell({ children }: ShellProps) {
                 })}
               </div>
 
-              {/* Sync status row */}
+              {/* Sync status */}
               <div className="flex items-center justify-center gap-2 py-3 bg-muted/30 border-t border-border mt-auto">
                 <div className={`w-2 h-2 rounded-full ${syncStatus?.deviceCount ? "bg-green-500" : "bg-muted-foreground"}`} />
                 <span className="text-xs text-muted-foreground font-medium">
