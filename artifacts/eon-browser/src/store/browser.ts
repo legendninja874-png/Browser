@@ -13,6 +13,7 @@ export interface BrowserState {
   adBlockEnabled: boolean;
   theme: Theme;
   urlInputOpen: boolean;
+  pendingUrlInput: string;
 
   setSearchEngine: (engine: BrowserState["searchEngine"]) => void;
   setIsIncognito: (incognito: boolean) => void;
@@ -24,6 +25,7 @@ export interface BrowserState {
   setAdBlockEnabled: (adBlock: boolean) => void;
   setTheme: (theme: Theme) => void;
   setUrlInputOpen: (open: boolean) => void;
+  setPendingUrlInput: (val: string) => void;
 }
 
 export const useBrowserStore = create<BrowserState>((set) => ({
@@ -37,6 +39,7 @@ export const useBrowserStore = create<BrowserState>((set) => ({
   adBlockEnabled: true,
   theme: (localStorage.getItem("eon-theme") as Theme) || "dark",
   urlInputOpen: false,
+  pendingUrlInput: "",
 
   setSearchEngine: (searchEngine) => set({ searchEngine }),
   setIsIncognito: (isIncognito) => set({ isIncognito }),
@@ -47,6 +50,7 @@ export const useBrowserStore = create<BrowserState>((set) => ({
   setReaderMode: (readerMode) => set({ readerMode }),
   setAdBlockEnabled: (adBlockEnabled) => set({ adBlockEnabled }),
   setUrlInputOpen: (urlInputOpen) => set({ urlInputOpen }),
+  setPendingUrlInput: (pendingUrlInput) => set({ pendingUrlInput }),
   setTheme: (theme) => {
     localStorage.setItem("eon-theme", theme);
     document.documentElement.setAttribute("data-theme", theme);

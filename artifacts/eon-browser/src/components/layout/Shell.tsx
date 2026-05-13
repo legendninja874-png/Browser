@@ -61,12 +61,9 @@ export function Shell({ children }: ShellProps) {
   const isSecure = activeTab?.url?.startsWith("https://");
 
   const handleAddressTap = () => {
-    if (isBrowser) {
-      setUrlInputOpen(true);
-    } else {
-      navigate("/browser");
-      setTimeout(() => setUrlInputOpen(true), 120);
-    }
+    // Set the store flag synchronously BEFORE navigating so Browser.tsx sees it on mount
+    setUrlInputOpen(true);
+    if (!isBrowser) navigate("/browser");
   };
 
   return (

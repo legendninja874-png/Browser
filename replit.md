@@ -269,3 +269,17 @@ Workflow: `.github/workflows/build-android.yml`
   - **Shell.tsx**: Bottom URL pill now triggers the URL overlay directly (on /browser: opens overlay; off /browser: navigates then opens overlay)
   - **store/browser.ts**: Added `urlInputOpen` / `setUrlInputOpen` state for Shell↔Browser communication
   - **InAppBrowser**: Changed to `showToolbar: false` + `hardwareBack: true` — removes the ugly "Done" button and URL bar; user closes webview with Android hardware back button (standard Chrome behavior)
+
+### Session — 2026-05-13 (part 3)
+- Port conflict resolved: artifact workflows were stealing ports 8080 and 5000; killed conflicting processes, restarted main workflows
+- User reported: URL bar non-functional, tabs option broken, 3-dot menu broken, new tab broken, no history/recent searches/suggestions in URL overlay
+- User provided a 3-part Chrome Replication Master Prompt requesting full Chrome-level browser UX
+- Changes implemented:
+  - **store/browser.ts**: Added `pendingUrlInput` + `setPendingUrlInput` so any page can pre-fill the URL overlay before navigating
+  - **Browser.tsx — URL Overlay**: Now fetches real data — `useListHistory` (up to 100 entries, filtered live as user types), `useGetRecentBookmarks` (filtered live), quick-access grid, "Search for X" + "Navigate to X" inline suggestions
+  - **Browser.tsx — New Tab Page**: Shows EoN branding + search pill + quick-site grid (uses `useGetTopSites` API data, falls back to static) + last 5 recent history entries
+  - **Browser.tsx — Active Tab**: Chrome-style top bar (back, address pill, reload, bookmark star, 3-dots menu); 3-dots opens page actions: Bookmark, Share, Copy URL, Desktop Site, Open in browser
+  - **Browser.tsx — Tabs strip**: Multi-tab strip with + button for new tab creation
+  - **Home.tsx**: Search bar now opens URL overlay with pre-filled query instead of just navigating to /browser; quick-site buttons navigate properly
+  - **Shell.tsx**: `handleAddressTap` now sets `urlInputOpen` synchronously BEFORE navigating (fixes timing race); 3-dot menu fully functional
+- Workflow fixes: Port conflict kills + restart sequence documented

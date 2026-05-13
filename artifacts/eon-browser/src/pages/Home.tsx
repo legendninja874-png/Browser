@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useGetTopSites, useGetRecentHistory, useGetSmartSuggestions, useListTabs } from "@workspace/api-client-react";
 import { Mic, ScanLine, Search, Plus, Shield, ShieldAlert, Wifi, BatteryMedium, ShieldCheck, ChevronRight } from "lucide-react";
+import { useBrowserStore } from "@/store/browser";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function getDomain(url: string) {
@@ -26,6 +27,13 @@ export default function Home() {
   const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
   const [timeStr, setTimeStr] = useState("");
+  const { setUrlInputOpen, setPendingUrlInput } = useBrowserStore();
+
+  const openSearch = (prefill?: string) => {
+    if (prefill) setPendingUrlInput(prefill);
+    setUrlInputOpen(true);
+    navigate("/browser");
+  };
   
   useEffect(() => {
     const updateTime = () => setTimeStr(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -61,9 +69,11 @@ export default function Home() {
                 type="text"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && query.trim()) navigate("/browser"); }}
+                onFocus={() => openSearch(query)}
+                onKeyDown={e => { if (e.key === "Enter" && query.trim()) openSearch(query); }}
                 placeholder="Search or type web address"
                 className="flex-1 bg-transparent outline-none text-[15px] font-medium text-foreground placeholder:text-muted-foreground/70"
+                readOnly
               />
               <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
                 <Mic className="w-5 h-5 hover:text-foreground transition-colors cursor-pointer" />
@@ -104,7 +114,7 @@ export default function Home() {
                 {topSites?.slice(0, 7).map((site, i) => (
                   <button
                     key={i}
-                    onClick={() => navigate("/browser")}
+                    onClick={() => openSearch(site.url)}
                     className="flex flex-col items-center gap-2 group"
                   >
                     <div className="w-14 h-14 rounded-[18px] bg-card border border-border/80 flex items-center justify-center shadow-sm group-hover:bg-muted transition-colors">
