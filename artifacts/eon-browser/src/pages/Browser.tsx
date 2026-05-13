@@ -157,13 +157,31 @@ export default function Browser() {
     setIframeBlocked(false);
     startProgress();
 
+    const onDone = (tabId: number) => {
+      invalidateTabs();
+      addHistory.mutate({ data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } });
+    };
+
     if (activeTab) {
       updateTab.mutate(
         { id: activeTab.id, data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } },
+        { onSuccess: (_, vars) => onDone(vars.id) },
+      );
+    } else {
+      // No tab exists yet — create one, then immediately mark it active
+      createTab.mutate(
+        { data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } },
         {
-          onSuccess: () => {
-            invalidateTabs();
-            addHistory.mutate({ data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } });
+          onSuccess: (newTab) => {
+            updateTab.mutate(
+              { id: (newTab as { id: number }).id, data: { isActive: true } },
+              {
+                onSuccess: () => {
+                  invalidateTabs();
+                  addHistory.mutate({ data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } });
+                },
+              },
+            );
           },
         },
       );
