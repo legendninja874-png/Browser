@@ -8,6 +8,7 @@ import intelligenceRouter from "./intelligence";
 import downloadsRouter   from "./downloads";
 import dashboardRouter   from "./dashboard";
 import syncRouter        from "./sync";
+import proxyRouter       from "./proxy";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(intelligenceRouter);
 router.use(downloadsRouter);
 router.use(dashboardRouter);
 router.use(syncRouter);
+router.use(proxyRouter);
 
 export default router;

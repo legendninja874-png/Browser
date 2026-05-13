@@ -123,6 +123,11 @@ export default function Browser() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  function toProxyUrl(url: string): string {
+    if (!url || url === "about:newtab") return "";
+    return `/api/proxy?url=${encodeURIComponent(url)}`;
+  }
+
   const activeTab = tabs?.find(t => t.isActive);
   const invalidateTabs = () => queryClient.invalidateQueries({ queryKey: getListTabsQueryKey() });
 
@@ -163,20 +168,20 @@ export default function Browser() {
     finishProgress();
     setIframeBlocked(false);
 
-    // Try to read the iframe's current URL after navigation (same-origin only)
+    // Since the iframe is served from our own proxy (same-origin), we can read its URL
     try {
-      const iframeUrl = iframeRef.current?.contentWindow?.location?.href;
-      if (iframeUrl && iframeUrl !== "about:blank" && activeTab) {
-        const iframeDomain = getDomain(iframeUrl);
-        if (iframeUrl !== activeTab.url) {
-          updateTab.mutate(
-            { id: activeTab.id, data: { url: iframeUrl, title: iframeDomain || iframeUrl } },
-            { onSuccess: invalidateTabs },
-          );
-        }
+      const search = iframeRef.current?.contentWindow?.location?.search ?? "";
+      const params = new URLSearchParams(search);
+      const proxiedUrl = params.get("url");
+      if (proxiedUrl && activeTab && proxiedUrl !== activeTab.url) {
+        const title = getDomain(proxiedUrl) || proxiedUrl;
+        updateTab.mutate(
+          { id: activeTab.id, data: { url: proxiedUrl, title } },
+          { onSuccess: invalidateTabs },
+        );
       }
     } catch {
-      // Cross-origin — expected, ignore
+      // ignore
     }
   }, [activeTab]);
 
@@ -184,6 +189,43 @@ export default function Browser() {
     finishProgress();
     setIframeBlocked(true);
   }, []);
+
+  // Listen for navigation messages posted by the proxy shim injected into pages
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (!e.data || typeof e.data !== "object") return;
+
+      if (e.data.type === "eon-navigate" && e.data.url) {
+        const targetUrl: string = e.data.url;
+        setIframeBlocked(false);
+        startProgress();
+        if (activeTab) {
+          updateTab.mutate(
+            { id: activeTab.id, data: { url: targetUrl, title: getDomain(targetUrl) || targetUrl } },
+            {
+              onSuccess: () => {
+                invalidateTabs();
+                addHistory.mutate({ data: { url: targetUrl, title: getDomain(targetUrl) || targetUrl } });
+              },
+            },
+          );
+        }
+      }
+
+      if (e.data.type === "eon-urlchange" && e.data.url) {
+        const targetUrl: string = e.data.url;
+        if (activeTab && targetUrl !== activeTab.url) {
+          updateTab.mutate(
+            { id: activeTab.id, data: { url: targetUrl, title: getDomain(targetUrl) || targetUrl } },
+            { onSuccess: invalidateTabs },
+          );
+        }
+      }
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [activeTab]);
 
   const handleNavigate = useCallback(async (overrideUrl?: string) => {
     const raw = (overrideUrl ?? urlValue).trim();
@@ -544,12 +586,12 @@ export default function Browser() {
               <iframe
                 key={iframeKey}
                 ref={iframeRef}
-                src={activeTab?.url}
+                src={activeTab?.url ? toProxyUrl(activeTab.url) : undefined}
                 title={domain || "Browser"}
                 className="w-full h-full border-0 block bg-white"
                 onLoad={handleIframeLoad}
                 onError={handleIframeError}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads allow-modals"
                 allow="autoplay; encrypted-media; fullscreen; geolocation; camera; microphone"
               />
             )}
