@@ -29,9 +29,8 @@ export function Shell({ children }: ShellProps) {
   const createTab = useCreateTab();
   const { data: syncStatus } = useGetSyncStatus();
 
-  const { isDesktopMode, setIsDesktopMode, setUrlInputOpen } = useBrowserStore();
+  const { isDesktopMode, setIsDesktopMode, setUrlInputOpen, currentUrl } = useBrowserStore();
 
-  const activeTab = tabs?.find(t => t.isActive);
   const tabCount = tabs?.length ?? 0;
 
   const handleNewTab = () => {
@@ -53,17 +52,12 @@ export function Shell({ children }: ShellProps) {
   };
 
   const isBrowser = location === "/browser";
-  const hasUrl = isBrowser && !!activeTab?.url && activeTab.url !== "about:newtab";
+  const hasUrl = isBrowser && !!currentUrl;
 
-  const getAddressLabel = () => {
-    if (hasUrl) {
-      try { return new URL(activeTab!.url!).hostname.replace("www.", ""); } catch { return activeTab?.url; }
-    }
-    return null;
-  };
-
-  const addressLabel = getAddressLabel();
-  const isSecure = activeTab?.url?.startsWith("https://");
+  const addressLabel = hasUrl
+    ? (() => { try { return new URL(currentUrl).hostname.replace("www.", ""); } catch { return currentUrl; } })()
+    : null;
+  const isSecure = currentUrl.startsWith("https://");
 
   const handleAddressTap = () => {
     setUrlInputOpen(true);

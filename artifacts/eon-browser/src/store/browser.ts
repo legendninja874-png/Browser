@@ -15,6 +15,11 @@ export interface BrowserState {
   urlInputOpen: boolean;
   pendingUrlInput: string;
 
+  // Local navigation state — drives the iframe immediately without waiting for the DB.
+  // This is the source of truth for what is currently loaded in the browser view.
+  currentUrl: string;
+  currentTitle: string;
+
   setSearchEngine: (engine: BrowserState["searchEngine"]) => void;
   setIsIncognito: (incognito: boolean) => void;
   setBottomBarButtons: (buttons: string[]) => void;
@@ -26,6 +31,7 @@ export interface BrowserState {
   setTheme: (theme: Theme) => void;
   setUrlInputOpen: (open: boolean) => void;
   setPendingUrlInput: (val: string) => void;
+  setCurrentUrl: (url: string, title?: string) => void;
 }
 
 export const useBrowserStore = create<BrowserState>((set) => ({
@@ -40,6 +46,8 @@ export const useBrowserStore = create<BrowserState>((set) => ({
   theme: (localStorage.getItem("eon-theme") as Theme) || "dark",
   urlInputOpen: false,
   pendingUrlInput: "",
+  currentUrl: "",
+  currentTitle: "",
 
   setSearchEngine: (searchEngine) => set({ searchEngine }),
   setIsIncognito: (isIncognito) => set({ isIncognito }),
@@ -51,6 +59,8 @@ export const useBrowserStore = create<BrowserState>((set) => ({
   setAdBlockEnabled: (adBlockEnabled) => set({ adBlockEnabled }),
   setUrlInputOpen: (urlInputOpen) => set({ urlInputOpen }),
   setPendingUrlInput: (pendingUrlInput) => set({ pendingUrlInput }),
+  setCurrentUrl: (currentUrl, currentTitle) =>
+    set({ currentUrl, currentTitle: currentTitle ?? currentUrl }),
   setTheme: (theme) => {
     localStorage.setItem("eon-theme", theme);
     document.documentElement.setAttribute("data-theme", theme);

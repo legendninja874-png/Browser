@@ -19,12 +19,12 @@ function buildUrl(input: string, engine: string): string {
   if (t.startsWith("http://") || t.startsWith("https://")) return t;
   if (t.includes(".") && !t.includes(" ")) return `https://${t}`;
   const bases: Record<string, string> = {
-    google: "https://www.google.com/search?q=",
-    bing: "https://www.bing.com/search?q=",
+    google:     "https://www.google.com/search?q=",
+    bing:       "https://www.bing.com/search?q=",
     duckduckgo: "https://duckduckgo.com/?q=",
-    brave: "https://search.brave.com/search?q=",
-    ecosia: "https://www.ecosia.org/search?q=",
-    yahoo: "https://search.yahoo.com/search?p=",
+    brave:      "https://search.brave.com/search?q=",
+    ecosia:     "https://www.ecosia.org/search?q=",
+    yahoo:      "https://search.yahoo.com/search?p=",
   };
   return `${bases[engine] ?? bases.google}${encodeURIComponent(t)}`;
 }
@@ -44,9 +44,20 @@ function getFavicon(url: string) {
   try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`; } catch { return null; }
 }
 
+// On native (Capacitor), relative URLs resolve to capacitor://localhost/...
+// so we need the absolute backend origin. On web, we use relative paths.
+const NATIVE_API_BASE: string =
+  (import.meta.env.VITE_API_URL as string | undefined) ??
+  (typeof window !== "undefined" &&
+   typeof window.Capacitor !== "undefined" &&
+   typeof window.Capacitor.isNativePlatform === "function" &&
+   window.Capacitor.isNativePlatform()
+    ? "https://workspace.beastfuher.replit.app"
+    : "");
+
 function toProxyUrl(url: string): string {
   if (!url || url === "about:newtab") return "";
-  return `/api/proxy?url=${encodeURIComponent(url)}`;
+  return `${NATIVE_API_BASE}/api/proxy?url=${encodeURIComponent(url)}`;
 }
 
 const QUICK_SITES = [
@@ -63,122 +74,104 @@ const QUICK_SITES = [
 export default function Browser() {
   const queryClient = useQueryClient();
 
+  // DB-backed tab data (background sync only — not required to render)
   const { data: tabs } = useListTabs();
-  const updateTab = useUpdateTab();
-  const closeTab = useCloseTab();
-  const addHistory = useAddHistoryEntry();
+  const updateTab    = useUpdateTab();
+  const closeTab     = useCloseTab();
+  const addHistory   = useAddHistoryEntry();
   const createBookmark = useCreateBookmark();
-  const createTab = useCreateTab();
+  const createTab    = useCreateTab();
 
-  const { data: allHistory } = useListHistory();
+  const { data: allHistory }     = useListHistory();
   const { data: recentBookmarks } = useGetRecentBookmarks();
-  const { data: topSites } = useGetTopSites();
+  const { data: topSites }       = useGetTopSites();
 
   const {
     urlInputOpen, setUrlInputOpen,
     pendingUrlInput, setPendingUrlInput,
     searchEngine,
+    currentUrl, currentTitle, setCurrentUrl,
   } = useBrowserStore();
 
-  const [urlValue, setUrlValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [urlValue, setUrlValue]       = useState("");
+  const [isLoading, setIsLoading]     = useState(false);
+  const [progress, setProgress]       = useState(0);
   const [iframeBlocked, setIframeBlocked] = useState(false);
-  const [iframeKey, setIframeKey] = useState(0);
+  const [iframeKey, setIframeKey]     = useState(0);
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
+  const iframeRef   = useRef<HTMLIFrameElement>(null);
+  const progressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const activeTab = tabs?.find(t => t.isActive);
+  // The DB active tab is used only for tab strip display and background sync
+  const activeDbTab = tabs?.find((t: { isActive?: boolean }) => t.isActive);
   const invalidateTabs = () => queryClient.invalidateQueries({ queryKey: getListTabsQueryKey() });
 
-  const handleActivate = (id: number) => {
-    if (activeTab?.id === id) return;
-    updateTab.mutate({ id, data: { isActive: true } }, { onSuccess: invalidateTabs });
-  };
-
-  const handleCloseTab = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    closeTab.mutate({ id }, { onSuccess: invalidateTabs });
-  };
-
-  const handleNewTab = () => {
-    createTab.mutate(
-      { data: { url: "about:newtab", title: "New Tab" } },
-      { onSuccess: () => invalidateTabs() },
-    );
-  };
-
+  // ── Progress helpers ──────────────────────────────────────────────────────
   const startProgress = useCallback(() => {
     setIsLoading(true);
     setProgress(15);
-    if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
-    progressTimerRef.current = setTimeout(() => setProgress(60), 300);
+    if (progressRef.current) clearTimeout(progressRef.current);
+    progressRef.current = setTimeout(() => setProgress(60), 300);
   }, []);
 
   const finishProgress = useCallback(() => {
     setProgress(100);
-    if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
-    progressTimerRef.current = setTimeout(() => {
+    if (progressRef.current) clearTimeout(progressRef.current);
+    progressRef.current = setTimeout(() => {
       setIsLoading(false);
       setProgress(0);
     }, 400);
   }, []);
 
+  // ── Iframe events ──────────────────────────────────────────────────────────
   const handleIframeLoad = useCallback(() => {
     finishProgress();
     setIframeBlocked(false);
-    try {
-      const search = iframeRef.current?.contentWindow?.location?.search ?? "";
-      const proxiedUrl = new URLSearchParams(search).get("url");
-      if (proxiedUrl && activeTab && proxiedUrl !== activeTab.url) {
-        updateTab.mutate(
-          { id: activeTab.id, data: { url: proxiedUrl, title: getDomain(proxiedUrl) || proxiedUrl } },
-          { onSuccess: invalidateTabs },
-        );
-      }
-    } catch { /* cross-origin expected */ }
-  }, [activeTab, finishProgress]);
+  }, [finishProgress]);
 
   const handleIframeError = useCallback(() => {
     finishProgress();
     setIframeBlocked(true);
   }, [finishProgress]);
 
+  // ── Core navigation — instant local update, background DB sync ────────────
   const handleNavigate = useCallback((overrideUrl?: string) => {
     const raw = (overrideUrl ?? urlValue).trim();
     if (!raw) return;
     const finalUrl = buildUrl(raw, searchEngine);
     if (!finalUrl) return;
 
+    // 1. Close overlay and update local state IMMEDIATELY — iframe loads now
     setUrlInputOpen(false);
     setUrlValue("");
     setIframeBlocked(false);
+    const domain = getDomain(finalUrl) || finalUrl;
+    setCurrentUrl(finalUrl, domain);
     startProgress();
+    setIframeKey(k => k + 1);
 
-    const onDone = (tabId: number) => {
-      invalidateTabs();
-      addHistory.mutate({ data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } });
-    };
-
-    if (activeTab) {
+    // 2. Background DB sync — fire-and-forget, won't block navigation
+    if (activeDbTab) {
       updateTab.mutate(
-        { id: activeTab.id, data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } },
-        { onSuccess: (_, vars) => onDone(vars.id) },
+        { id: activeDbTab.id, data: { url: finalUrl, title: domain } },
+        {
+          onSuccess: () => {
+            invalidateTabs();
+            addHistory.mutate({ data: { url: finalUrl, title: domain } });
+          },
+        },
       );
     } else {
-      // No tab exists yet — create one, then immediately mark it active
       createTab.mutate(
-        { data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } },
+        { data: { url: finalUrl, title: domain } },
         {
-          onSuccess: (newTab) => {
+          onSuccess: (newTab: { id: number }) => {
             updateTab.mutate(
-              { id: (newTab as { id: number }).id, data: { isActive: true } },
-              {
-                onSuccess: () => {
+              { id: newTab.id, data: { isActive: true } },
+              { onSuccess: () => {
                   invalidateTabs();
-                  addHistory.mutate({ data: { url: finalUrl, title: getDomain(finalUrl) || finalUrl } });
+                  addHistory.mutate({ data: { url: finalUrl, title: domain } });
                 },
               },
             );
@@ -186,13 +179,14 @@ export default function Browser() {
         },
       );
     }
-  }, [urlValue, searchEngine, activeTab, startProgress]);
+  }, [urlValue, searchEngine, activeDbTab, startProgress]);
 
   const handleReload = useCallback(() => {
+    if (!currentUrl) return;
     setIframeBlocked(false);
     startProgress();
     setIframeKey(k => k + 1);
-  }, [startProgress]);
+  }, [currentUrl, startProgress]);
 
   const handleBack = useCallback(() => {
     try { iframeRef.current?.contentWindow?.history.back(); } catch { /* ignore */ }
@@ -203,13 +197,13 @@ export default function Browser() {
   }, []);
 
   const handleBookmarkCurrent = useCallback(() => {
-    if (!activeTab?.url || activeTab.url === "about:newtab") return;
+    if (!currentUrl) return;
     createBookmark.mutate({
-      data: { url: activeTab.url, title: activeTab.title || getDomain(activeTab.url) || activeTab.url },
+      data: { url: currentUrl, title: currentTitle || getDomain(currentUrl) || currentUrl },
     });
-  }, [activeTab]);
+  }, [currentUrl, currentTitle]);
 
-  // Listen for shell control events (back, forward, reload, bookmark)
+  // ── Shell control events ──────────────────────────────────────────────────
   useEffect(() => {
     const onBack     = () => handleBack();
     const onForward  = () => handleForward();
@@ -228,22 +222,23 @@ export default function Browser() {
     };
   }, [handleBack, handleForward, handleReload, handleBookmarkCurrent]);
 
-  // Listen for in-page navigation messages from the proxy shim
+  // ── Proxy shim messages (in-page navigation) ───────────────────────────────
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       if (!e.data || typeof e.data !== "object") return;
 
       if (e.data.type === "eon-navigate" && e.data.url) {
         const targetUrl: string = e.data.url;
+        const domain = getDomain(targetUrl) || targetUrl;
         setIframeBlocked(false);
         startProgress();
-        if (activeTab) {
+        setCurrentUrl(targetUrl, domain);
+        if (activeDbTab) {
           updateTab.mutate(
-            { id: activeTab.id, data: { url: targetUrl, title: getDomain(targetUrl) || targetUrl } },
-            {
-              onSuccess: () => {
+            { id: activeDbTab.id, data: { url: targetUrl, title: domain } },
+            { onSuccess: () => {
                 invalidateTabs();
-                addHistory.mutate({ data: { url: targetUrl, title: getDomain(targetUrl) || targetUrl } });
+                addHistory.mutate({ data: { url: targetUrl, title: domain } });
               },
             },
           );
@@ -252,9 +247,10 @@ export default function Browser() {
 
       if (e.data.type === "eon-urlchange" && e.data.url) {
         const targetUrl: string = e.data.url;
-        if (activeTab && targetUrl !== activeTab.url) {
+        setCurrentUrl(targetUrl, getDomain(targetUrl) || targetUrl);
+        if (activeDbTab && targetUrl !== activeDbTab.url) {
           updateTab.mutate(
-            { id: activeTab.id, data: { url: targetUrl, title: getDomain(targetUrl) || targetUrl } },
+            { id: activeDbTab.id, data: { url: targetUrl, title: getDomain(targetUrl) || targetUrl } },
             { onSuccess: invalidateTabs },
           );
         }
@@ -263,21 +259,13 @@ export default function Browser() {
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [activeTab, startProgress]);
+  }, [activeDbTab, startProgress]);
 
-  // Reset iframe when tab URL changes
-  useEffect(() => {
-    setIframeBlocked(false);
-    setIframeKey(k => k + 1);
-    if (hasUrl) startProgress();
-  }, [activeTab?.url]);
-
-  // Open URL overlay
+  // ── URL overlay open ───────────────────────────────────────────────────────
   useEffect(() => {
     if (urlInputOpen) {
       const pending = pendingUrlInput;
-      const current = activeTab?.url && activeTab.url !== "about:newtab" ? activeTab.url : "";
-      const init = pending || current;
+      const init = pending || currentUrl;
       setUrlValue(init);
       if (pending) setPendingUrlInput("");
       setTimeout(() => {
@@ -287,11 +275,40 @@ export default function Browser() {
     }
   }, [urlInputOpen]);
 
+  // ── Tab strip helpers ──────────────────────────────────────────────────────
+  const handleActivate = (id: number) => {
+    const tab = tabs?.find((t: { id: number }) => t.id === id);
+    if (!tab || tab.isActive) return;
+    updateTab.mutate({ id, data: { isActive: true } }, {
+      onSuccess: () => {
+        invalidateTabs();
+        // Reflect active tab's URL in local state
+        if (tab.url && tab.url !== "about:newtab") setCurrentUrl(tab.url, tab.title || "");
+        else setCurrentUrl("", "");
+      },
+    });
+  };
+
+  const handleCloseTab = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    closeTab.mutate({ id }, { onSuccess: invalidateTabs });
+  };
+
+  const handleNewTab = () => {
+    setCurrentUrl("", "");
+    createTab.mutate(
+      { data: { url: "about:newtab", title: "New Tab" } },
+      { onSuccess: () => invalidateTabs() },
+    );
+  };
+
+  // ── Suggestion filtering ───────────────────────────────────────────────────
   const historyMatches = useMemo(() => {
     const q = urlValue.trim().toLowerCase();
     if (!q) return (allHistory ?? []).slice(0, 8);
     return (allHistory ?? [])
-      .filter(h => h.url.toLowerCase().includes(q) || h.title?.toLowerCase().includes(q))
+      .filter((h: { url: string; title?: string }) =>
+        h.url.toLowerCase().includes(q) || h.title?.toLowerCase().includes(q))
       .slice(0, 6);
   }, [urlValue, allHistory]);
 
@@ -299,18 +316,18 @@ export default function Browser() {
     const q = urlValue.trim().toLowerCase();
     if (!q) return (recentBookmarks ?? []).slice(0, 4);
     return (recentBookmarks ?? [])
-      .filter(b => b.url.toLowerCase().includes(q) || b.title?.toLowerCase().includes(q))
+      .filter((b: { url: string; title?: string }) =>
+        b.url.toLowerCase().includes(q) || b.title?.toLowerCase().includes(q))
       .slice(0, 3);
   }, [urlValue, recentBookmarks]);
 
-  const hasUrl = !!activeTab?.url && activeTab.url !== "about:newtab";
-  const domain = activeTab ? getDomain(activeTab.url ?? "") : null;
-  const faviconUrl = activeTab?.url ? getFavicon(activeTab.url) : null;
+  const hasUrl = !!currentUrl;
+  const domain = currentUrl ? getDomain(currentUrl) : null;
 
   return (
     <div className="flex flex-col h-full bg-background relative overflow-hidden">
 
-      {/* Loading progress bar — thin strip at very top */}
+      {/* Thin loading bar at very top */}
       <AnimatePresence>
         {isLoading && (
           <motion.div
@@ -329,10 +346,10 @@ export default function Browser() {
         )}
       </AnimatePresence>
 
-      {/* Multi-tab strip — only when 2+ tabs open */}
+      {/* Multi-tab strip — only when 2+ tabs */}
       {tabs && tabs.length > 1 && (
         <div className="shrink-0 bg-background flex items-end px-1 pt-1 h-[38px] overflow-x-auto no-scrollbar border-b border-border/30 z-10">
-          {tabs.map(tab => (
+          {(tabs as Array<{ id: number; isActive?: boolean; url?: string; title?: string }>).map(tab => (
             <div
               key={tab.id}
               onClick={() => handleActivate(tab.id)}
@@ -342,7 +359,7 @@ export default function Browser() {
                   : "bg-transparent text-muted-foreground hover:bg-muted/30 border-transparent"}`}
             >
               <img src={getFavicon(tab.url || "") || ""} className="w-3.5 h-3.5 shrink-0" alt=""
-                onError={e => (e.currentTarget.style.display = "none")} />
+                onError={e => ((e.currentTarget as HTMLImageElement).style.display = "none")} />
               <span className="text-[11.5px] font-medium truncate flex-1 leading-none">
                 {tab.title || getDomain(tab.url ?? "") || "New Tab"}
               </span>
@@ -366,7 +383,7 @@ export default function Browser() {
       {/* ── Main content ── */}
       <div className="flex-1 relative overflow-hidden">
 
-        {/* NEW TAB PAGE */}
+        {/* NEW TAB PAGE — shown when no URL is loaded locally */}
         {!hasUrl && (
           <div className="absolute inset-0 flex flex-col items-center pt-10 pb-4 px-4 overflow-y-auto no-scrollbar">
             <div className="w-full max-w-sm flex flex-col gap-7">
@@ -387,10 +404,12 @@ export default function Browser() {
 
               {/* Quick site grid */}
               <div className="grid grid-cols-4 gap-3">
-                {(topSites && topSites.length > 0 ? topSites.slice(0, 8) : QUICK_SITES).map((site, i) => {
-                  const siteUrl = "url" in site ? site.url : "";
-                  const siteLabel = "title" in site
-                    ? (site.title || getDomain(siteUrl) || "")
+                {(topSites && topSites.length > 0
+                  ? (topSites as Array<{ url?: string; title?: string }>).slice(0, 8)
+                  : QUICK_SITES
+                ).map((site, i) => {
+                  const siteUrl   = "url"   in site ? (site.url ?? "")   : "";
+                  const siteLabel = "title" in site ? (site.title ?? getDomain(siteUrl) ?? "")
                     : ("label" in site ? (site as { label: string }).label : "");
                   return (
                     <button key={i} onClick={() => handleNavigate(siteUrl)} className="flex flex-col items-center gap-2 group">
@@ -398,7 +417,7 @@ export default function Browser() {
                         <img
                           src={`https://www.google.com/s2/favicons?domain=${(() => { try { return new URL(siteUrl).hostname; } catch { return ""; } })()}&sz=64`}
                           className="w-8 h-8 rounded-lg" alt={siteLabel}
-                          onError={e => (e.currentTarget.style.display = "none")} />
+                          onError={e => ((e.currentTarget as HTMLImageElement).style.display = "none")} />
                       </div>
                       <span className="text-[11px] text-muted-foreground font-medium leading-none truncate w-full text-center">{siteLabel}</span>
                     </button>
@@ -407,16 +426,16 @@ export default function Browser() {
               </div>
 
               {/* Recent history */}
-              {allHistory && allHistory.length > 0 && (
+              {allHistory && (allHistory as Array<unknown>).length > 0 && (
                 <div>
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Recent</p>
                   <div className="flex flex-col gap-0.5">
-                    {allHistory.slice(0, 5).map((h, i) => (
+                    {(allHistory as Array<{ url: string; title?: string }>).slice(0, 5).map((h, i) => (
                       <button key={i} onClick={() => handleNavigate(h.url)}
                         className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/40 active:bg-muted transition-colors text-left w-full">
                         <div className="w-8 h-8 bg-muted rounded-xl flex items-center justify-center shrink-0">
                           <img src={getFavicon(h.url) || ""} className="w-5 h-5 rounded" alt=""
-                            onError={e => (e.currentTarget.style.display = "none")} />
+                            onError={e => ((e.currentTarget as HTMLImageElement).style.display = "none")} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-medium text-foreground truncate leading-tight">
@@ -434,7 +453,7 @@ export default function Browser() {
           </div>
         )}
 
-        {/* WEBVIEW — real iframe through proxy */}
+        {/* WEBVIEW — driven by local currentUrl, no DB roundtrip needed */}
         {hasUrl && (
           <div className="absolute inset-0">
             {iframeBlocked ? (
@@ -452,7 +471,7 @@ export default function Browser() {
                 <div className="flex flex-col gap-2 w-full max-w-xs">
                   <motion.button
                     whileTap={{ scale: 0.97 }}
-                    onClick={() => window.open(activeTab?.url ?? "", "_blank")}
+                    onClick={() => window.open(currentUrl, "_blank")}
                     className="flex items-center justify-center gap-2 w-full py-3.5 bg-primary text-white rounded-full font-semibold text-[15px]"
                   >
                     <ExternalLink className="w-4 h-4" /> Open {domain}
@@ -470,7 +489,7 @@ export default function Browser() {
               <iframe
                 key={iframeKey}
                 ref={iframeRef}
-                src={toProxyUrl(activeTab?.url ?? "")}
+                src={toProxyUrl(currentUrl)}
                 title={domain || "Browser"}
                 className="w-full h-full border-0 block bg-white"
                 onLoad={handleIframeLoad}
@@ -483,7 +502,7 @@ export default function Browser() {
         )}
       </div>
 
-      {/* ── URL OVERLAY — full-screen slide-up ── */}
+      {/* ── URL OVERLAY ── */}
       <AnimatePresence>
         {urlInputOpen && (
           <motion.div
@@ -530,7 +549,7 @@ export default function Browser() {
               </div>
             </div>
 
-            {/* Suggestions list */}
+            {/* Suggestions */}
             <div className="flex-1 overflow-y-auto">
 
               {urlValue.trim() && (
@@ -564,17 +583,17 @@ export default function Browser() {
                 </div>
               )}
 
-              {historyMatches.length > 0 && (
+              {(historyMatches as Array<{ url: string; title?: string }>).length > 0 && (
                 <div>
                   <p className="px-4 pt-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
                     {urlValue.trim() ? "From history" : "Recent"}
                   </p>
-                  {historyMatches.map((h, i) => (
+                  {(historyMatches as Array<{ url: string; title?: string }>).map((h, i) => (
                     <button key={i} onClick={() => handleNavigate(h.url)}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 active:bg-muted/60 transition-colors w-full text-left border-b border-border/20 last:border-0">
                       <div className="w-9 h-9 bg-muted rounded-full flex items-center justify-center shrink-0">
                         <img src={getFavicon(h.url) || ""} className="w-5 h-5 rounded" alt=""
-                          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                          onError={e => ((e.currentTarget as HTMLImageElement).style.display = "none")} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[14px] font-medium text-foreground truncate">{h.title || getDomain(h.url)}</p>
@@ -586,15 +605,15 @@ export default function Browser() {
                 </div>
               )}
 
-              {bookmarkMatches.length > 0 && (
+              {(bookmarkMatches as Array<{ url: string; title?: string }>).length > 0 && (
                 <div>
                   <p className="px-4 pt-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Bookmarks</p>
-                  {bookmarkMatches.map((b, i) => (
+                  {(bookmarkMatches as Array<{ url: string; title?: string }>).map((b, i) => (
                     <button key={i} onClick={() => handleNavigate(b.url)}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 active:bg-muted/60 transition-colors w-full text-left border-b border-border/20 last:border-0">
                       <div className="w-9 h-9 bg-muted rounded-full flex items-center justify-center shrink-0">
                         <img src={getFavicon(b.url) || ""} className="w-5 h-5 rounded" alt=""
-                          onError={e => (e.currentTarget.style.display = "none")} />
+                          onError={e => ((e.currentTarget as HTMLImageElement).style.display = "none")} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[14px] font-medium text-foreground truncate">{b.title || getDomain(b.url)}</p>
@@ -617,7 +636,7 @@ export default function Browser() {
                           <img
                             src={`https://www.google.com/s2/favicons?domain=${new URL(site.url).hostname}&sz=64`}
                             className="w-7 h-7 rounded" alt={site.label}
-                            onError={e => (e.currentTarget.style.display = "none")} />
+                            onError={e => ((e.currentTarget as HTMLImageElement).style.display = "none")} />
                         </div>
                         <span className="text-[11px] text-muted-foreground font-medium">{site.label}</span>
                       </button>
