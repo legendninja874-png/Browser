@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: eon-browser
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: >
+      npm install -g pnpm &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @workspace/eon-browser run build &&
+      pnpm --filter @workspace/api-server run build
+    startCommand: NODE_ENV=production pnpm --filter @workspace/api-server run start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false   # You set this manually in the Render dashboard to your Neon DB URL
+    healthCheckPath: /api/healthz
