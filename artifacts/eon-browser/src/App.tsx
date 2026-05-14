@@ -8,9 +8,9 @@ import { setBaseUrl } from "@workspace/api-client-react";
 
 // When running as a native Capacitor APK, relative API URLs resolve to
 // https://localhost/api/... where no server exists. We bake in the deployed
-// backend URL at build time via VITE_API_URL; fall back to the Replit
+// backend URL at build time via VITE_API_URL; fall back to the Render
 // production URL so debug builds also work without extra config.
-const NATIVE_FALLBACK_API = "https://workspace.beastfuher.replit.app";
+const NATIVE_FALLBACK_API = "https://eon-browser-8vil.onrender.com";
 
 declare global {
   interface Window {

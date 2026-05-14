@@ -52,7 +52,7 @@ const NATIVE_API_BASE: string =
    typeof window.Capacitor !== "undefined" &&
    typeof window.Capacitor.isNativePlatform === "function" &&
    window.Capacitor.isNativePlatform()
-    ? "https://workspace.beastfuher.replit.app"
+    ? "https://eon-browser-8vil.onrender.com"
     : "");
 
 function toProxyUrl(url: string): string {

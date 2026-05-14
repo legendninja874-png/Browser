@@ -328,7 +328,7 @@ To add a new table: edit schema → run `pnpm --filter @workspace/db run push`.
 ## Backend API
 
 The native APK points to an external Replit backend:
-- **Current URL**: `https://workspace.beastfuher.replit.app`
+- **Current URL**: `https://eon-browser-8vil.onrender.com`
 - **Configured in**: `artifacts/eon-browser/src/App.tsx` (line 13, `NATIVE_FALLBACK_API`)
 - **Also in**: `.github/workflows/build-android.yml` (`VITE_API_URL` env var)
 - **Override**: Set `VITE_API_URL` as a GitHub Actions repository secret to point the APK at any new backend URL without changing code
