@@ -4,7 +4,6 @@ services:
     runtime: node
     region: oregon
     plan: free
-    nodeVersion: 20.11.0
     buildCommand: >
       corepack enable pnpm &&
       pnpm install &&
@@ -12,6 +11,8 @@ services:
       pnpm --filter @workspace/api-server run build
     startCommand: NODE_ENV=production pnpm --filter @workspace/api-server run start
     envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
       - key: PORT
         value: 10000
       - key: NODE_ENV
